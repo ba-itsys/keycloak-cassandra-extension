@@ -4,7 +4,7 @@
 
   <groupId>de.arbeitsagentur.opdt</groupId>
   <artifactId>keycloak-cassandra-extension-parent</artifactId>
-  <version>5.4.6-26.4-SNAPSHOT</version>
+  <version>5.4.6-SNAPSHOT</version>
   <packaging>pom</packaging>
 
   <name>keycloak-extension-cassandra</name>
@@ -192,7 +192,7 @@
                 <version>${cassandra-java-driver.version}</version>
               </path>
               <!-- Optional: add this if you want to avoid the SLF4J warning "Failed to load class
-                                            StaticLoggerBinder, defaulting to no-operation implementation" when compiling. -->
+                                                          StaticLoggerBinder, defaulting to no-operation implementation" when compiling. -->
               <path>
                 <groupId>org.slf4j</groupId>
                 <artifactId>slf4j-nop</artifactId>
