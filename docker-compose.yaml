@@ -10,33 +10,30 @@ networks:
 
 services:
   cassandra:
-    image: docker.io/bitnami/cassandra:latest
+    image: cassandra:4.1
     ports:
       - '9042:9042'
     volumes:
-      - 'cassandra_data:/bitnami'
+      - 'cassandra_data:/var/lib/cassandra'
     networks:
       - keycloak
     healthcheck:
-      test: /opt/bitnami/cassandra/bin/cqlsh -u cassandra -p cassandra -e "describe keyspaces"
+      test: cqlsh -e "describe keyspaces"
       interval: 15s
       timeout: 10s
       retries: 10
     environment:
-      - CASSANDRA_SEEDS=cassandra
-      - CASSANDRA_PASSWORD_SEEDER=yes
-      - CASSANDRA_PASSWORD=cassandra
+      - CASSANDRA_DC=datacenter1
+      - CASSANDRA_CLUSTER_NAME=keycloak
   keycloak:
-    image: quay.io/keycloak/keycloak:24.0.2
+    image: quay.io/keycloak/keycloak:26.5.2
     volumes:
-      - ${PWD}/core/target/keycloak-cassandra-extension-2.7.6-25.0-SNAPSHOT.jar:/opt/keycloak/providers/keycloak-cassandra-extension-2.7.6-25.0-SNAPSHOT.jar
+      - ${PWD}/core/target/keycloak-cassandra-extension-5.4.7-SNAPSHOT.jar:/opt/keycloak/providers/keycloak-cassandra-extension.jar
     environment:
       - KC_COMMUNITY_DATASTORE_CASSANDRA_ENABLED=true
       - KC_SPI_CONNECTIONS_JPA_LEGACY_ENABLED=false
       - KC_SPI_CASSANDRA_CONNECTION_DEFAULT_PORT=9042
       - KC_SPI_CASSANDRA_CONNECTION_DEFAULT_CONTACT_POINTS=cassandra
-      - KC_SPI_CASSANDRA_CONNECTION_DEFAULT_USERNAME=cassandra
-      - KC_SPI_CASSANDRA_CONNECTION_DEFAULT_PASSWORD=cassandra
       - KC_SPI_CASSANDRA_CONNECTION_DEFAULT_LOCAL_DATACENTER=datacenter1
       - KC_SPI_CASSANDRA_CONNECTION_DEFAULT_KEYSPACE=test
       - KC_SPI_CASSANDRA_CONNECTION_DEFAULT_REPLICATION_FACTOR=1

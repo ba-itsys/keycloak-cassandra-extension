@@ -5,7 +5,7 @@
 # Cassandra storage extension for Keycloak
 
 Uses Apache Cassandra to store and retrieve entities of all storage areas except authorization and events.
-Requires Keycloak >= 26.4.0 (older versions may be supported by older versions of this extension).
+Requires Keycloak >= 26.5.2 (older versions may be supported by older versions of this extension).
 
 ## How to use
 

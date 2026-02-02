@@ -33,6 +33,8 @@ import de.arbeitsagentur.opdt.keycloak.cassandra.userSession.CassandraUserSessio
 import de.arbeitsagentur.opdt.keycloak.compatibility.HardcodedDeploymentStateProviderFactory;
 import de.arbeitsagentur.opdt.keycloak.compatibility.TransientPublicKeyStorageProviderFactory;
 import java.util.Set;
+import org.keycloak.cache.DefaultLocalCacheProviderFactory;
+import org.keycloak.cache.LocalCacheSPI;
 import org.keycloak.credential.CredentialSpi;
 import org.keycloak.credential.OTPCredentialProviderFactory;
 import org.keycloak.credential.PasswordCredentialProviderFactory;
@@ -51,7 +53,14 @@ import org.keycloak.provider.Spi;
 import org.keycloak.services.clientpolicy.ClientPolicyManagerSpi;
 import org.keycloak.services.clientpolicy.DefaultClientPolicyManagerFactory;
 import org.keycloak.services.clientregistration.policy.ClientRegistrationPolicySpi;
-import org.keycloak.services.clientregistration.policy.impl.*;
+import org.keycloak.services.clientregistration.policy.impl.ClientDisabledClientRegistrationPolicyFactory;
+import org.keycloak.services.clientregistration.policy.impl.ClientScopesClientRegistrationPolicyFactory;
+import org.keycloak.services.clientregistration.policy.impl.ConsentRequiredClientRegistrationPolicyFactory;
+import org.keycloak.services.clientregistration.policy.impl.MaxClientsClientRegistrationPolicyFactory;
+import org.keycloak.services.clientregistration.policy.impl.ProtocolMappersClientRegistrationPolicyFactory;
+import org.keycloak.services.clientregistration.policy.impl.RegistrationWebOriginsPolicyFactory;
+import org.keycloak.services.clientregistration.policy.impl.ScopeClientRegistrationPolicyFactory;
+import org.keycloak.services.clientregistration.policy.impl.TrustedHostClientRegistrationPolicyFactory;
 import org.keycloak.sessions.AuthenticationSessionSpi;
 import org.keycloak.tracing.NoopTracingProviderFactory;
 import org.keycloak.tracing.TracingSpi;
@@ -82,6 +91,7 @@ public class Map extends KeycloakModelParameters {
             .add(ValidatorSPI.class)
             .add(IdentityProviderStorageSpi.class)
             .add(TracingSpi.class)
+            .add(LocalCacheSPI.class)
             .build();
 
     static final Set<Class<? extends ProviderFactory>> ALLOWED_FACTORIES =
@@ -114,6 +124,7 @@ public class Map extends KeycloakModelParameters {
                     .add(ClientScopesClientRegistrationPolicyFactory.class)
                     .add(ScopeClientRegistrationPolicyFactory.class)
                     .add(MaxClientsClientRegistrationPolicyFactory.class)
+                    .add(RegistrationWebOriginsPolicyFactory.class)
                     .add(OTPCredentialProviderFactory.class)
                     .add(PasswordCredentialProviderFactory.class)
                     .add(DefaultPasswordPolicyManagerProviderFactory.class)
@@ -127,6 +138,7 @@ public class Map extends KeycloakModelParameters {
                     .add(DeclarativeUserProfileProviderFactory.class)
                     .add(ValidatorFactory.class)
                     .add(NoopTracingProviderFactory.class)
+                    .add(DefaultLocalCacheProviderFactory.class)
                     .build();
 
     public Map() {
