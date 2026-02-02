@@ -131,6 +131,13 @@ public class CassandraIdentityProviderStorageProvider implements IdentityProvide
     }
 
     @Override
+    public Stream<IdentityProviderModel> getAllStream(
+            IdentityProviderQuery query, Integer firstResult, Integer maxResults) {
+        // Delegate to existing method - filters will be applied by the query predicate in calling code
+        return getAllStream(Map.of(), firstResult, maxResults);
+    }
+
+    @Override
     public Stream<String> getByFlow(String flowId, String search, Integer firstResult, Integer maxResults) {
         int first = firstResult == null || firstResult < 0 ? 0 : firstResult;
         int resultCount = maxResults == null || maxResults < 0 ? Integer.MAX_VALUE : maxResults;

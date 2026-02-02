@@ -688,6 +688,11 @@ public class CassandraUserProvider extends TransactionalProvider<User, Cassandra
         // NOOP
     }
 
+    @Override
+    public UserCredentialManager getUserCredentialManager(UserModel user) {
+        return (UserCredentialManager) user.credentialManager();
+    }
+
     private UserModel getByIdOrThrow(RealmModel realm, UserModel user) {
         UserModel userById = getUserById(realm, user.getId());
         if (userById == null) {
