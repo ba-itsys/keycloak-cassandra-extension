@@ -1,5 +1,13 @@
 # Changelog
 
+## [5.5.3](https://github.com/ba-itsys/keycloak-cassandra-extension/compare/v5.5.2...v5.5.3) (2026-04-08)
+
+
+### Dependencies
+
+* **deps-dev:** bump org.apache.maven.plugins:maven-compiler-plugin ([f763e1f](https://github.com/ba-itsys/keycloak-cassandra-extension/commit/f763e1feae680b471aa9030e9be71b5cebd878d2))
+* **deps:** bump cassandra-java-driver.version from 4.19.0 to 4.19.2 ([5e4d632](https://github.com/ba-itsys/keycloak-cassandra-extension/commit/5e4d632c929bd8d630b7b47d752835c22446d7db))
+
 ## [5.5.2](https://github.com/ba-itsys/keycloak-cassandra-extension/compare/v5.5.1...v5.5.2) (2026-04-07)
 
 
