@@ -10,7 +10,7 @@ networks:
 
 services:
   cassandra:
-    image: cassandra:4.1
+    image: cassandra:5.0
     ports:
       - '9042:9042'
     volumes:
