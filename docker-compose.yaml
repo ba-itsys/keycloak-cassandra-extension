@@ -26,7 +26,7 @@ services:
       - CASSANDRA_DC=datacenter1
       - CASSANDRA_CLUSTER_NAME=keycloak
   keycloak:
-    image: quay.io/keycloak/keycloak:26.5.2
+    image: quay.io/keycloak/keycloak:26.6.1
     volumes:
       - ${PWD}/core/target/keycloak-cassandra-extension-5.4.7-SNAPSHOT.jar:/opt/keycloak/providers/keycloak-cassandra-extension.jar
     environment:
