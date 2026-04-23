@@ -23,6 +23,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
@@ -56,9 +57,7 @@ public class CassandraUserRepository extends TransactionalRepository<User, UserD
             return null;
         }
 
-        List<User> users = dao.findUsers(realmId, EMAIL, email).all().stream()
-                .map(idx -> findUserById(realmId, idx.getUserId()))
-                .filter(Objects::nonNull)
+        List<User> users = findConsistentUsers(realmId, EMAIL, email, user -> email.equals(user.getEmail())).stream()
                 .collect(Collectors.toList());
 
         if (users.size() > 1) {
@@ -79,10 +78,9 @@ public class CassandraUserRepository extends TransactionalRepository<User, UserD
             return null;
         }
 
-        List<User> users = dao.findUsers(realmId, USERNAME, username).all().stream()
-                .map(idx -> findUserById(realmId, idx.getUserId()))
-                .filter(Objects::nonNull)
-                .collect(Collectors.toList());
+        List<User> users =
+                findConsistentUsers(realmId, USERNAME, username, user -> username.equals(user.getUsername())).stream()
+                        .collect(Collectors.toList());
 
         if (users.size() > 1) {
             log.warn("Found multiple users with username: " + username);
@@ -102,9 +100,12 @@ public class CassandraUserRepository extends TransactionalRepository<User, UserD
             return null;
         }
 
-        List<User> users = dao.findUsers(realmId, USERNAME_CASE_INSENSITIVE, username).all().stream()
-                .map(idx -> findUserById(realmId, idx.getUserId()))
-                .filter(Objects::nonNull)
+        List<User> users = findConsistentUsers(
+                        realmId,
+                        USERNAME_CASE_INSENSITIVE,
+                        username,
+                        user -> username.equals(user.getUsernameCaseInsensitive()))
+                .stream()
                 .collect(Collectors.toList());
 
         if (users.size() > 1) {
@@ -260,6 +261,28 @@ public class CassandraUserRepository extends TransactionalRepository<User, UserD
         }
 
         return true;
+    }
+
+    private List<User> findConsistentUsers(
+            String realmId, String indexName, String indexValue, Predicate<User> consistencyCheck) {
+        return dao.findUsers(realmId, indexName, indexValue).all().stream()
+                .map(idx -> findConsistentUser(realmId, idx, consistencyCheck))
+                .filter(Objects::nonNull)
+                .collect(Collectors.toList());
+    }
+
+    private User findConsistentUser(String realmId, UserSearchIndex idx, Predicate<User> consistencyCheck) {
+        User user = findUserById(realmId, idx.getUserId());
+
+        if (user == null || !consistencyCheck.test(user)) {
+            log.warnf(
+                    "Deleting stale user search index entry realmId=%s name=%s value=%s userId=%s",
+                    idx.getRealmId(), idx.getName(), idx.getValue(), idx.getUserId());
+            dao.deleteIndex(idx.getRealmId(), idx.getName(), idx.getValue(), idx.getUserId());
+            return null;
+        }
+
+        return user;
     }
 
     @Override

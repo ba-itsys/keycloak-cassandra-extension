@@ -21,6 +21,9 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.*;
 import static org.junit.Assert.*;
 
+import com.datastax.oss.driver.api.core.CqlSession;
+import com.datastax.oss.driver.api.core.cql.SimpleStatement;
+import de.arbeitsagentur.opdt.keycloak.cassandra.connection.CassandraConnectionProvider;
 import de.arbeitsagentur.opdt.keycloak.cassandra.user.CassandraUserAdapter;
 import java.util.*;
 import java.util.concurrent.ConcurrentSkipListSet;
@@ -1365,6 +1368,74 @@ public class UserModelTest extends KeycloakModelTest {
     }
 
     @Test
+    public void testGetUserByUsernameIgnoresAndCleansStaleSearchIndexEntries() {
+        final String oldUsername = "a@example.com";
+        final String newUsername = "a@example.com#archived";
+
+        String userId = withRealm(originalRealmId, (session, realm) -> {
+            UserModel user = session.users().addUser(realm, oldUsername);
+            user.setUsername(newUsername);
+            return user.getId();
+        });
+
+        withRealm(originalRealmId, (session, realm) -> {
+            CassandraConnectionProvider connectionProvider = session.getProvider(CassandraConnectionProvider.class);
+            CqlSession cqlSession = connectionProvider.getCqlSession();
+
+            cqlSession.execute(SimpleStatement.newInstance(
+                    "INSERT INTO user_search_index (realm_id, name, value, user_id) VALUES (?, ?, ?, ?)",
+                    realm.getId(),
+                    UserModel.USERNAME,
+                    oldUsername,
+                    userId));
+            cqlSession.execute(SimpleStatement.newInstance(
+                    "INSERT INTO user_search_index (realm_id, name, value, user_id) VALUES (?, ?, ?, ?)",
+                    realm.getId(),
+                    "usernameCaseInsensitive",
+                    oldUsername.toLowerCase(Locale.ROOT),
+                    userId));
+
+            return null;
+        });
+
+        assertEquals(2L, countUserSearchIndexEntries(originalRealmId, UserModel.USERNAME, oldUsername, newUsername));
+        assertEquals(
+                2L,
+                countUserSearchIndexEntries(
+                        originalRealmId,
+                        "usernameCaseInsensitive",
+                        oldUsername.toLowerCase(Locale.ROOT),
+                        newUsername.toLowerCase(Locale.ROOT)));
+
+        withRealm(originalRealmId, (session, realm) -> {
+            UserModel user = session.users().getUserByUsername(realm, oldUsername);
+            assertNull(user);
+
+            UserModel renamedUser = session.users().getUserByUsername(realm, newUsername);
+            assertNotNull(renamedUser);
+            assertEquals(newUsername, renamedUser.getUsername());
+            return null;
+        });
+
+        assertEquals(
+                1L,
+                countUserSearchIndexEntries(
+                        originalRealmId,
+                        "usernameCaseInsensitive",
+                        oldUsername.toLowerCase(Locale.ROOT),
+                        newUsername.toLowerCase(Locale.ROOT)));
+
+        withRealm(originalRealmId, (session, realm) -> {
+            realm.setAttribute(REALM_ATTR_USERNAME_CASE_SENSITIVE, "true");
+            UserModel user = session.users().getUserByUsername(realm, oldUsername);
+            assertNull(user);
+            return null;
+        });
+
+        assertEquals(1L, countUserSearchIndexEntries(originalRealmId, UserModel.USERNAME, oldUsername, newUsername));
+    }
+
+    @Test
     public void thatEmailChangeWorksAsExpected() {
         withRealm(originalRealmId, (session, realm) -> {
             UserModel user = session.users().addUser(realm, "user");
@@ -1620,6 +1691,23 @@ public class UserModelTest extends KeycloakModelTest {
                     nullValue());
 
             return null;
+        });
+    }
+
+    private long countUserSearchIndexEntries(String realmId, String name, String... values) {
+        return inComittedTransaction(session -> {
+            CassandraConnectionProvider connectionProvider = session.getProvider(CassandraConnectionProvider.class);
+            CqlSession cqlSession = connectionProvider.getCqlSession();
+            return Arrays.stream(values)
+                    .mapToLong(value -> cqlSession
+                            .execute(SimpleStatement.newInstance(
+                                    "SELECT user_id FROM user_search_index WHERE realm_id = ? AND name = ? AND value = ?",
+                                    realmId,
+                                    name,
+                                    value))
+                            .all()
+                            .size())
+                    .sum();
         });
     }
 }
