@@ -1,5 +1,18 @@
 # Changelog
 
+## [5.5.4](https://github.com/ba-itsys/keycloak-cassandra-extension/compare/v5.5.3...v5.5.4) (2026-04-23)
+
+
+### Bug Fixes
+
+* eventual consistency for stale search index entries ([7866155](https://github.com/ba-itsys/keycloak-cassandra-extension/commit/7866155343d8ab2798f1596e2c72f5094dacde18))
+
+
+### Dependencies
+
+* **deps-dev:** bump org.apache.maven.plugins:maven-jar-plugin ([e84e906](https://github.com/ba-itsys/keycloak-cassandra-extension/commit/e84e906e45b116972d187bba3e577203792a2a11))
+* **deps:** bump org.sonatype.central:central-publishing-maven-plugin ([44e0b0d](https://github.com/ba-itsys/keycloak-cassandra-extension/commit/44e0b0d36b97f2cb5a233253c5e8163556d68094))
+
 ## [5.5.3](https://github.com/ba-itsys/keycloak-cassandra-extension/compare/v5.5.2...v5.5.3) (2026-04-08)
 
 
