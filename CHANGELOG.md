@@ -1,5 +1,12 @@
 # Changelog
 
+## [5.5.5](https://github.com/ba-itsys/keycloak-cassandra-extension/compare/v5.5.4...v5.5.5) (2026-04-24)
+
+
+### Dependencies
+
+* **deps:** bump org.projectlombok:lombok from 1.18.44 to 1.18.46 ([0c90b4e](https://github.com/ba-itsys/keycloak-cassandra-extension/commit/0c90b4e37bf3906189c3e69058ba73aa3fa16d4f))
+
 ## [5.5.4](https://github.com/ba-itsys/keycloak-cassandra-extension/compare/v5.5.3...v5.5.4) (2026-04-23)
 
 
