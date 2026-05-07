@@ -108,4 +108,22 @@ public class CassandraLoginFailureAdapter implements UserLoginFailureModel {
         entity.setLastIpFailure(ip);
         loginFailureRepository.insertOrUpdate(entity);
     }
+
+    @Override
+    public int getNumSecondaryAuthFailures() {
+        return entity.getNumSecondaryAuthFailures() == null ? 0 : entity.getNumSecondaryAuthFailures();
+    }
+
+    @Override
+    public void incrementSecondaryAuthFailures() {
+        entity.setNumSecondaryAuthFailures(getNumSecondaryAuthFailures() + 1);
+        loginFailureRepository.insertOrUpdate(entity);
+    }
+
+    @Override
+    public void clearPrimaryAndSecondaryAuthFailures() {
+        clearFailures();
+        entity.setNumSecondaryAuthFailures(0);
+        loginFailureRepository.insertOrUpdate(entity);
+    }
 }

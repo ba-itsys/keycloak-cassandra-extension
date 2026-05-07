@@ -520,18 +520,20 @@ public class CassandraUserProvider extends TransactionalProvider<User, Cassandra
                                     : makeAttributeComparator;
 
                     return switch (entry.getKey()) {
-                        case UserModel.SEARCH -> makeUsernameComparator
-                                .apply(UserModel.USERNAME, entry.getValue())
-                                .or(makeAttributeComparator.apply(UserModel.EMAIL, entry.getValue()))
-                                .or(makeAttributeComparator.apply(UserModel.FIRST_NAME, entry.getValue()))
-                                .or(makeAttributeComparator.apply(UserModel.LAST_NAME, entry.getValue()));
+                        case UserModel.SEARCH ->
+                            makeUsernameComparator
+                                    .apply(UserModel.USERNAME, entry.getValue())
+                                    .or(makeAttributeComparator.apply(UserModel.EMAIL, entry.getValue()))
+                                    .or(makeAttributeComparator.apply(UserModel.FIRST_NAME, entry.getValue()))
+                                    .or(makeAttributeComparator.apply(UserModel.LAST_NAME, entry.getValue()));
                         case UserModel.USERNAME -> makeUsernameComparator.apply(UserModel.USERNAME, entry.getValue());
-                        case UserModel.IDP_ALIAS -> makeAttributeComparator.apply(
-                                UserModel.IDP_ALIAS, entry.getValue());
-                        case UserModel.IDP_USER_ID -> makeAttributeComparator.apply(
-                                UserModel.IDP_USER_ID, entry.getValue());
-                        case UserModel.INCLUDE_SERVICE_ACCOUNT -> (Predicate<UserModel>) (UserModel u) ->
-                                Boolean.parseBoolean(entry.getValue()) || u.getServiceAccountClientLink() == null;
+                        case UserModel.IDP_ALIAS ->
+                            makeAttributeComparator.apply(UserModel.IDP_ALIAS, entry.getValue());
+                        case UserModel.IDP_USER_ID ->
+                            makeAttributeComparator.apply(UserModel.IDP_USER_ID, entry.getValue());
+                        case UserModel.INCLUDE_SERVICE_ACCOUNT ->
+                            (Predicate<UserModel>) (UserModel u) ->
+                                    Boolean.parseBoolean(entry.getValue()) || u.getServiceAccountClientLink() == null;
                         default -> makeAttributeComparator.apply(entry.getKey(), entry.getValue());
                     };
                 })
