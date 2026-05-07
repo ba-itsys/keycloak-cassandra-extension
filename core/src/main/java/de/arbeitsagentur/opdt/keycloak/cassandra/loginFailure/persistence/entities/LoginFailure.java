@@ -41,4 +41,5 @@ public class LoginFailure {
     private Long lastFailure;
     private String lastIpFailure;
     private Integer numTemporaryLockouts;
+    private Integer numSecondaryAuthFailures;
 }

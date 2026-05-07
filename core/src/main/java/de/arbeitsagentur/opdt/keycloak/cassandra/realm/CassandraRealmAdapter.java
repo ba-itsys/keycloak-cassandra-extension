@@ -72,6 +72,8 @@ public class CassandraRealmAdapter extends TransactionalModelAdapter<Realm> impl
     public static final String IS_PERMANENT_LOCKOUT = AttributeTypes.INTERNAL_ATTRIBUTE_PREFIX + "isPermanentLockout";
     public static final String MAX_TEMPORARY_LOCKOUTS =
             AttributeTypes.INTERNAL_ATTRIBUTE_PREFIX + "maxTemporaryLockouts";
+    public static final String MAX_SECONDARY_AUTH_FAILURES =
+            AttributeTypes.INTERNAL_ATTRIBUTE_PREFIX + "maxSecondaryAuthFailures";
     public static final String MAX_FAILURE_WAIT_SECONDS =
             AttributeTypes.INTERNAL_ATTRIBUTE_PREFIX + "maxFailureWaitSeconds";
     public static final String WAIT_INCREMENT_SECONDS =
@@ -189,6 +191,7 @@ public class CassandraRealmAdapter extends TransactionalModelAdapter<Realm> impl
             AttributeTypes.INTERNAL_ATTRIBUTE_PREFIX + "adminPermissionsEnabled";
     public static final String IS_VERIFIABLE_CREDENTIALS_ENABLED =
             AttributeTypes.INTERNAL_ATTRIBUTE_PREFIX + "verifiableCredentialsEnabled";
+    public static final String IS_SCIM_API_ENABLED = AttributeTypes.INTERNAL_ATTRIBUTE_PREFIX + "scimApiEnabled";
 
     public static final String BRUTE_FORCE_STRATEGY = AttributeTypes.INTERNAL_ATTRIBUTE_PREFIX + "bruteForceStrategy";
 
@@ -343,6 +346,16 @@ public class CassandraRealmAdapter extends TransactionalModelAdapter<Realm> impl
     }
 
     @Override
+    public void setScimApiEnabled(boolean value) {
+        setAttribute(IS_SCIM_API_ENABLED, value);
+    }
+
+    @Override
+    public boolean isScimApiEnabled() {
+        return getAttribute(IS_SCIM_API_ENABLED, Boolean.FALSE);
+    }
+
+    @Override
     public boolean isBruteForceProtected() {
         return getAttribute(IS_BRUTE_FORCE_PROTECTED, false);
     }
@@ -443,6 +456,16 @@ public class CassandraRealmAdapter extends TransactionalModelAdapter<Realm> impl
     @Override
     public void setFailureFactor(int failureFactor) {
         setAttribute(FAILURE_FACTOR, failureFactor);
+    }
+
+    @Override
+    public int getMaxSecondaryAuthFailures() {
+        return getAttribute(MAX_SECONDARY_AUTH_FAILURES, 0);
+    }
+
+    @Override
+    public void setMaxSecondaryAuthFailures(int value) {
+        setAttribute(MAX_SECONDARY_AUTH_FAILURES, value);
     }
 
     @Override

@@ -110,6 +110,11 @@ public class CassandraGroupAdapter implements GroupModel {
     }
 
     @Override
+    public OrganizationModel getOrganization() {
+        return null;
+    }
+
+    @Override
     public Stream<RoleModel> getRealmRoleMappingsStream() {
         return getRoleMappingsStream().filter(roleModel -> roleModel.getContainer() instanceof RealmModel);
     }
