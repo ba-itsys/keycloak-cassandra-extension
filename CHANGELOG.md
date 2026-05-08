@@ -1,5 +1,12 @@
 # Changelog
 
+## [5.6.0](https://github.com/ba-itsys/keycloak-cassandra-extension/compare/v5.5.5...v5.6.0) (2026-05-08)
+
+
+### Features
+
+* **deps:** bump keycloak.version from 26.5.7 to 26.6.1 ([b0090bc](https://github.com/ba-itsys/keycloak-cassandra-extension/commit/b0090bc42e900305506bc374fe76986339c0bdaf))
+
 ## [5.5.5](https://github.com/ba-itsys/keycloak-cassandra-extension/compare/v5.5.4...v5.5.5) (2026-04-24)
 
 
