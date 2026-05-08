@@ -1,0 +1,1 @@
+ALTER TABLE login_failures ADD num_secondary_auth_failures int;

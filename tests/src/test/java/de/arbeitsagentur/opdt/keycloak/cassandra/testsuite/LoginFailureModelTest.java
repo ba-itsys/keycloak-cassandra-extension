@@ -62,6 +62,7 @@ public class LoginFailureModelTest extends KeycloakModelTest {
             currentModel.setLastIPFailure("some-ip");
             currentModel.setFailedLoginNotBefore(50);
             currentModel.incrementFailures();
+            currentModel.incrementSecondaryAuthFailures();
 
             return null;
         });
@@ -74,8 +75,9 @@ public class LoginFailureModelTest extends KeycloakModelTest {
             assertThat(currentModel.getLastIPFailure(), is("some-ip"));
             assertThat(currentModel.getFailedLoginNotBefore(), is(50));
             assertThat(currentModel.getNumFailures(), is(1));
+            assertThat(currentModel.getNumSecondaryAuthFailures(), is(1));
 
-            currentModel.clearFailures();
+            currentModel.clearPrimaryAndSecondaryAuthFailures();
 
             return null;
         });
@@ -88,6 +90,7 @@ public class LoginFailureModelTest extends KeycloakModelTest {
             assertNull(currentModel.getLastIPFailure());
             assertThat(currentModel.getFailedLoginNotBefore(), is(0));
             assertThat(currentModel.getNumFailures(), is(0));
+            assertThat(currentModel.getNumSecondaryAuthFailures(), is(0));
 
             loginFailureProvider.removeUserLoginFailure(realm, userId);
 
