@@ -1,5 +1,14 @@
 # Changelog
 
+## [5.6.1](https://github.com/ba-itsys/keycloak-cassandra-extension/compare/v5.6.0...v5.6.1) (2026-05-19)
+
+
+### Dependencies
+
+* **deps-dev:** bump asm.version from 9.9.1 to 9.10 ([57fa74e](https://github.com/ba-itsys/keycloak-cassandra-extension/commit/57fa74ec686ad5736d448ab21c7519f48c0d48dd))
+* **deps-dev:** bump com.diffplug.spotless:spotless-maven-plugin ([f22191f](https://github.com/ba-itsys/keycloak-cassandra-extension/commit/f22191f17d03aada5ea25b74237652a4d18da3f0))
+* **deps:** bump org.slf4j:slf4j-nop from 2.0.17 to 2.0.18 ([8c0c1de](https://github.com/ba-itsys/keycloak-cassandra-extension/commit/8c0c1decffdddeb1351171fcdcbac533406850b8))
+
 ## [5.6.0](https://github.com/ba-itsys/keycloak-cassandra-extension/compare/v5.5.5...v5.6.0) (2026-05-08)
 
 
