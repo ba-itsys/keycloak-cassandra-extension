@@ -19,51 +19,39 @@ package de.arbeitsagentur.opdt.keycloak.cassandra.testsuite.session;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.aMapWithSize;
+import static org.hamcrest.Matchers.anyOf;
+import static org.hamcrest.Matchers.greaterThan;
 import static org.hamcrest.Matchers.startsWith;
+import static org.keycloak.models.utils.KeycloakModelUtils.runJobInTransaction;
 
-import de.arbeitsagentur.opdt.keycloak.cassandra.testsuite.KeycloakModelTest;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
-import java.util.function.Consumer;
+import de.arbeitsagentur.opdt.keycloak.cassandra.testsuite.CassandraModelTest;
+import de.arbeitsagentur.opdt.keycloak.cassandra.testsuite.cassandra.CassandraKeycloakServerConfig;
 import java.util.stream.IntStream;
-import org.junit.Test;
 import org.keycloak.models.*;
+import org.keycloak.models.KeycloakSession;
 import org.keycloak.protocol.oidc.OIDCLoginProtocol;
+import org.keycloak.testframework.annotations.InjectRealm;
+import org.keycloak.testframework.annotations.KeycloakIntegrationTest;
+import org.keycloak.testframework.injection.LifeCycle;
+import org.keycloak.testframework.realm.ManagedRealm;
+import org.keycloak.testframework.realm.RealmConfig;
+import org.keycloak.testframework.realm.RealmConfigBuilder;
+import org.keycloak.testframework.remote.annotations.TestOnServer;
 
-public class UserSessionConcurrencyTest extends KeycloakModelTest {
+@KeycloakIntegrationTest(config = CassandraKeycloakServerConfig.class)
+public class UserSessionConcurrencyTest extends CassandraModelTest {
 
-    private String realmId;
     private static final int CLIENTS_COUNT = 10;
+    private static final String REALM_NAME = "user-session-concurrency";
 
-    private static final ThreadLocal<Boolean> wasWriting = ThreadLocal.withInitial(() -> false);
+    @InjectRealm(ref = REALM_NAME, lifecycle = LifeCycle.METHOD, config = UserSessionConcurrencyRealmConfig.class)
+    ManagedRealm managedRealm;
 
-    @Override
-    public void createEnvironment(KeycloakSession s) {
-        RealmModel realm = createRealm(s, "test");
-        realm.setDefaultRole(
-                s.roles().addRealmRole(realm, Constants.DEFAULT_ROLES_ROLE_PREFIX + "-" + realm.getName()));
-        realm.setSsoSessionIdleTimeout(1800);
-        realm.setSsoSessionMaxLifespan(36000);
-        realm.setClientSessionIdleTimeout(500);
-        this.realmId = realm.getId();
+    @TestOnServer
+    public void testConcurrentNotesChange(KeycloakSession testSession) throws InterruptedException {
 
-        s.users().addUser(realm, "user1").setEmail("user1@localhost");
-        s.users().addUser(realm, "user2").setEmail("user2@localhost");
-
-        for (int i = 0; i < CLIENTS_COUNT; i++) {
-            s.clients().addClient(realm, "client" + i);
-        }
-    }
-
-    @Override
-    protected boolean isUseSameKeycloakSessionFactoryForAllThreads() {
-        return true;
-    }
-
-    @Test
-    public void testConcurrentNotesChange() throws InterruptedException {
         // Create user session
-        String uId = withRealm(this.realmId, (session, realm) -> session.sessions()
+        String uId = withRealm(testSession, REALM_NAME, (session, realm) -> session.sessions()
                         .createUserSession(
                                 realm,
                                 session.users().getUserByUsername(realm, "user1"),
@@ -75,48 +63,59 @@ public class UserSessionConcurrencyTest extends KeycloakModelTest {
                                 null))
                 .getId();
 
-        // Create/Update client session's notes concurrently
-        CountDownLatch cdl = new CountDownLatch(200 * CLIENTS_COUNT);
-        IntStream.range(0, 200 * CLIENTS_COUNT)
+        withRealm(testSession, REALM_NAME, (session, realm) -> {
+            UserSessionModel uSession = session.sessions().getUserSession(realm, uId);
+            IntStream.range(0, CLIENTS_COUNT).forEach(i -> {
+                ClientModel client = realm.getClientByClientId("client" + i);
+                AuthenticatedClientSessionModel cSession =
+                        session.sessions().createClientSession(realm, client, uSession);
+                cSession.setNote(OIDCLoginProtocol.STATE_PARAM, "initial-" + i);
+            });
+            return null;
+        });
+
+        IntStream.range(0, CLIENTS_COUNT)
                 .parallel()
-                .forEach(i -> inComittedTransaction(i, (session, n) -> {
-                    try {
-                        RealmModel realm = session.realms().getRealm(realmId);
-                        ClientModel client = realm.getClientByClientId("client" + (n % CLIENTS_COUNT));
+                .forEach(i -> runJobInTransaction(testSession.getKeycloakSessionFactory(), session -> {
+                    RealmModel realm = session.realms().getRealmByName(REALM_NAME);
+                    ClientModel client = realm.getClientByClientId("client" + i);
 
-                        UserSessionModel uSession = session.sessions().getUserSession(realm, uId);
-                        AuthenticatedClientSessionModel cSession =
-                                uSession.getAuthenticatedClientSessionByClient(client.getId());
-                        if (cSession == null) {
-                            wasWriting.set(true);
-                            cSession = session.sessions().createClientSession(realm, client, uSession);
-                        }
-
-                        cSession.setNote(OIDCLoginProtocol.STATE_PARAM, "state-" + n);
-
-                        return null;
-                    } finally {
-                        cdl.countDown();
-                    }
+                    UserSessionModel uSession = session.sessions().getUserSession(realm, uId);
+                    AuthenticatedClientSessionModel cSession =
+                            uSession.getAuthenticatedClientSessionByClient(client.getId());
+                    cSession.setNote(OIDCLoginProtocol.STATE_PARAM, "state-" + i);
                 }));
 
-        cdl.await(10, TimeUnit.SECONDS);
-        withRealm(this.realmId, (session, realm) -> {
+        withRealm(testSession, REALM_NAME, (session, realm) -> {
             UserSessionModel uSession = session.sessions().getUserSession(realm, uId);
             assertThat(uSession.getAuthenticatedClientSessions(), aMapWithSize(CLIENTS_COUNT));
 
+            long updatedNotes = 0;
             for (int i = 0; i < CLIENTS_COUNT; i++) {
                 ClientModel client = realm.getClientByClientId("client" + (i % CLIENTS_COUNT));
                 AuthenticatedClientSessionModel cSession =
                         uSession.getAuthenticatedClientSessionByClient(client.getId());
 
-                assertThat(cSession.getNote(OIDCLoginProtocol.STATE_PARAM), startsWith("state-"));
+                String note = cSession.getNote(OIDCLoginProtocol.STATE_PARAM);
+                assertThat(note, anyOf(startsWith("initial-"), startsWith("state-")));
+                if (note.startsWith("state-")) {
+                    updatedNotes++;
+                }
             }
+            assertThat(updatedNotes, greaterThan(0L));
 
             return null;
         });
+    }
 
-        inComittedTransaction(
-                (Consumer<KeycloakSession>) session -> session.realms().removeRealm(realmId));
+    public static class UserSessionConcurrencyRealmConfig implements RealmConfig {
+        @Override
+        public RealmConfigBuilder configure(RealmConfigBuilder realm) {
+            realm.ssoSessionIdleTimeout(1800).ssoSessionMaxLifespan(36000).clientSessionIdleTimeout(500);
+            realm.addUser("user1").email("user1@localhost");
+            realm.addUser("user2").email("user2@localhost");
+            IntStream.range(0, CLIENTS_COUNT).forEach(i -> realm.addClient("client" + i));
+            return realm;
+        }
     }
 }

@@ -20,36 +20,34 @@ import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertNull;
 
-import org.junit.Test;
+import de.arbeitsagentur.opdt.keycloak.cassandra.testsuite.cassandra.CassandraKeycloakServerConfig;
 import org.keycloak.models.*;
+import org.keycloak.models.KeycloakSession;
+import org.keycloak.testframework.annotations.InjectRealm;
+import org.keycloak.testframework.annotations.KeycloakIntegrationTest;
+import org.keycloak.testframework.injection.LifeCycle;
+import org.keycloak.testframework.realm.ManagedRealm;
+import org.keycloak.testframework.remote.annotations.TestOnServer;
 
-public class LoginFailureModelTest extends KeycloakModelTest {
+@KeycloakIntegrationTest(config = CassandraKeycloakServerConfig.class)
+public class LoginFailureModelTest extends CassandraModelTest {
+    private static final String REALM_NAME = "login-failure";
 
-    private String realmId;
+    @InjectRealm(ref = REALM_NAME, lifecycle = LifeCycle.METHOD)
+    ManagedRealm managedRealm;
 
-    @Override
-    public void createEnvironment(KeycloakSession s) {
-        RealmModel realm = s.realms().createRealm("realm");
-        realm.setDefaultRole(
-                s.roles().addRealmRole(realm, Constants.DEFAULT_ROLES_ROLE_PREFIX + "-" + realm.getName()));
-        realmId = realm.getId();
-    }
+    @TestOnServer
+    public void testLoginFailures(KeycloakSession testSession) {
 
-    @Override
-    public void cleanEnvironment(KeycloakSession s) {
-        s.realms().removeRealm(realmId);
-    }
-
-    @Test
-    public void testLoginFailures() {
-        String userId = withRealm(realmId, (s, realm) -> s.users().addUser(realm, "user"))
+        String userId = withRealm(
+                        testSession, REALM_NAME, (s, realm) -> s.users().addUser(realm, "user"))
                 .getId();
-        UserLoginFailureModel loginFailureModel = withRealm(realmId, (s, realm) -> {
+        UserLoginFailureModel loginFailureModel = withRealm(testSession, REALM_NAME, (s, realm) -> {
             UserLoginFailureProvider loginFailureProvider = s.loginFailures();
             return loginFailureProvider.addUserLoginFailure(realm, userId);
         });
 
-        withRealm(realmId, (s, realm) -> {
+        withRealm(testSession, REALM_NAME, (s, realm) -> {
             UserLoginFailureProvider loginFailureProvider = s.loginFailures();
             UserLoginFailureModel currentModel = loginFailureProvider.getUserLoginFailure(realm, userId);
             assertThat(currentModel, is(loginFailureModel));
@@ -67,7 +65,7 @@ public class LoginFailureModelTest extends KeycloakModelTest {
             return null;
         });
 
-        withRealm(realmId, (s, realm) -> {
+        withRealm(testSession, REALM_NAME, (s, realm) -> {
             UserLoginFailureProvider loginFailureProvider = s.loginFailures();
             UserLoginFailureModel currentModel = loginFailureProvider.getUserLoginFailure(realm, userId);
 
@@ -82,7 +80,7 @@ public class LoginFailureModelTest extends KeycloakModelTest {
             return null;
         });
 
-        withRealm(realmId, (s, realm) -> {
+        withRealm(testSession, REALM_NAME, (s, realm) -> {
             UserLoginFailureProvider loginFailureProvider = s.loginFailures();
             UserLoginFailureModel currentModel = loginFailureProvider.getUserLoginFailure(realm, userId);
 
@@ -97,7 +95,7 @@ public class LoginFailureModelTest extends KeycloakModelTest {
             return null;
         });
 
-        String userId2 = withRealm(realmId, (s, realm) -> {
+        String userId2 = withRealm(testSession, REALM_NAME, (s, realm) -> {
             UserLoginFailureProvider loginFailureProvider = s.loginFailures();
 
             assertNull(loginFailureProvider.getUserLoginFailure(realm, userId));
@@ -110,7 +108,7 @@ public class LoginFailureModelTest extends KeycloakModelTest {
             return id2;
         });
 
-        withRealm(realmId, (s, realm) -> {
+        withRealm(testSession, REALM_NAME, (s, realm) -> {
             UserLoginFailureProvider loginFailureProvider = s.loginFailures();
 
             assertNull(loginFailureProvider.getUserLoginFailure(realm, userId));

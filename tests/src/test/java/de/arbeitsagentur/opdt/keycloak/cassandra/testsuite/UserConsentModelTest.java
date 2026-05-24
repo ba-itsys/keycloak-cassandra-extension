@@ -16,42 +16,51 @@
  */
 package de.arbeitsagentur.opdt.keycloak.cassandra.testsuite;
 
+import static org.keycloak.models.utils.KeycloakModelUtils.getClientScopeByName;
+
+import de.arbeitsagentur.opdt.keycloak.cassandra.testsuite.cassandra.CassandraKeycloakServerConfig;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import org.junit.Assert;
-import org.junit.Test;
 import org.keycloak.models.*;
-import org.keycloak.models.utils.KeycloakModelUtils;
 import org.keycloak.protocol.oidc.OIDCLoginProtocol;
+import org.keycloak.representations.idm.ClientScopeRepresentation;
+import org.keycloak.testframework.annotations.InjectRealm;
+import org.keycloak.testframework.annotations.KeycloakIntegrationTest;
+import org.keycloak.testframework.injection.LifeCycle;
+import org.keycloak.testframework.realm.ManagedRealm;
+import org.keycloak.testframework.realm.RealmConfig;
+import org.keycloak.testframework.realm.RealmConfigBuilder;
+import org.keycloak.testframework.remote.annotations.TestOnServer;
 
 /**
  * Ported from
  *
  * @author <a href="mailto:mposolda@redhat.com">Marek Posolda</a>
  */
-public class UserConsentModelTest extends KeycloakModelTest {
+@KeycloakIntegrationTest(config = CassandraKeycloakServerConfig.class)
+public class UserConsentModelTest extends CassandraModelTest {
+    private static final String REALM_NAME = "user-consent";
 
-    private String realmId;
+    @InjectRealm(ref = REALM_NAME, lifecycle = LifeCycle.METHOD, config = UserConsentRealmConfig.class)
+    ManagedRealm managedRealm;
 
-    @Override
-    public void createEnvironment(KeycloakSession s) {
-        RealmModel realm = s.realms().createRealm("original");
-        realm.setDefaultRole(
-                s.roles().addRealmRole(realm, Constants.DEFAULT_ROLES_ROLE_PREFIX + "-" + realm.getName()));
+    private static void createConsents(KeycloakSession testSession, String realmName) {
+        withRealm(testSession, realmName, (session, realm) -> {
+            setupConsents(session, realm.getId());
+            return null;
+        });
+    }
 
-        ClientModel fooClient = realm.addClient("foo-client");
-        ClientModel barClient = realm.addClient("bar-client");
-
-        ClientScopeModel fooScope = realm.addClientScope("foo");
-        fooScope.setProtocol(OIDCLoginProtocol.LOGIN_PROTOCOL);
-
-        ClientScopeModel barScope = realm.addClientScope("bar");
-        barScope.setProtocol(OIDCLoginProtocol.LOGIN_PROTOCOL);
-
-        UserModel john = s.users().addUser(realm, "john");
-        UserModel mary = s.users().addUser(realm, "mary");
-
+    private static void setupConsents(KeycloakSession s, String realmId) {
+        RealmModel realm = s.realms().getRealm(realmId);
+        ClientModel fooClient = realm.getClientByClientId("foo-client");
+        ClientModel barClient = realm.getClientByClientId("bar-client");
+        ClientScopeModel fooScope = getClientScopeByName(realm, "foo");
+        ClientScopeModel barScope = getClientScopeByName(realm, "bar");
+        UserModel john = s.users().getUserByUsername(realm, "john");
+        UserModel mary = s.users().getUserByUsername(realm, "mary");
         UserConsentModel johnFooGrant = new UserConsentModel(fooClient);
         johnFooGrant.addGrantedClientScope(fooScope);
         s.users().addConsent(realm, john.getId(), johnFooGrant);
@@ -64,28 +73,21 @@ public class UserConsentModelTest extends KeycloakModelTest {
         maryFooGrant.addGrantedClientScope(fooScope);
         s.users().addConsent(realm, mary.getId(), maryFooGrant);
 
-        // hardcoded-client was originally an added component to the realm
-        ClientModel hardcodedClient = realm.addClient("hardcoded-client");
-
+        ClientModel hardcodedClient = realm.getClientByClientId("hardcoded-client");
         UserConsentModel maryHardcodedGrant = new UserConsentModel(hardcodedClient);
         s.users().addConsent(realm, mary.getId(), maryHardcodedGrant);
-
-        realmId = realm.getId();
     }
 
-    @Override
-    public void cleanEnvironment(KeycloakSession s) {
-        s.realms().removeRealm(realmId);
-    }
-
-    private boolean isClientScopeGranted(RealmModel realm, String scopeName, UserConsentModel consentModel) {
-        ClientScopeModel clientScope = KeycloakModelUtils.getClientScopeByName(realm, scopeName);
+    private static boolean isClientScopeGranted(RealmModel realm, String scopeName, UserConsentModel consentModel) {
+        ClientScopeModel clientScope = getClientScopeByName(realm, scopeName);
         return consentModel.isClientScopeGranted(clientScope);
     }
 
-    @Test
-    public void basicConsentTest() {
-        withRealm(realmId, (session, realm) -> {
+    @TestOnServer
+    public void basicConsentTest(KeycloakSession testSession) {
+
+        createConsents(testSession, REALM_NAME);
+        withRealm(testSession, REALM_NAME, (session, realm) -> {
             ClientModel fooClient = realm.getClientByClientId("foo-client");
             ClientModel barClient = realm.getClientByClientId("bar-client");
 
@@ -127,9 +129,11 @@ public class UserConsentModelTest extends KeycloakModelTest {
         });
     }
 
-    @Test
-    public void getAllConsentTest() {
-        withRealm(realmId, (session, realm) -> {
+    @TestOnServer
+    public void getAllConsentTest(KeycloakSession testSession) {
+
+        createConsents(testSession, REALM_NAME);
+        withRealm(testSession, REALM_NAME, (session, realm) -> {
             ClientModel fooClient = realm.getClientByClientId("foo-client");
 
             UserModel john = session.users().getUserByUsername(realm, "john");
@@ -161,9 +165,11 @@ public class UserConsentModelTest extends KeycloakModelTest {
         });
     }
 
-    @Test
-    public void updateWithClientScopeRemovalTest() {
-        withRealm(realmId, (session, realm) -> {
+    @TestOnServer
+    public void updateWithClientScopeRemovalTest(KeycloakSession testSession) {
+
+        createConsents(testSession, REALM_NAME);
+        withRealm(testSession, REALM_NAME, (session, realm) -> {
             ClientModel fooClient = realm.getClientByClientId("foo-client");
             UserModel john = session.users().getUserByUsername(realm, "john");
 
@@ -171,7 +177,7 @@ public class UserConsentModelTest extends KeycloakModelTest {
             Assert.assertEquals(1, johnConsent.getGrantedClientScopes().size());
 
             // Remove foo protocol mapper from johnConsent
-            ClientScopeModel fooScope = KeycloakModelUtils.getClientScopeByName(realm, "foo");
+            ClientScopeModel fooScope = getClientScopeByName(realm, "foo");
             johnConsent.getGrantedClientScopes().remove(fooScope);
 
             session.users().updateConsent(realm, john.getId(), johnConsent);
@@ -179,7 +185,7 @@ public class UserConsentModelTest extends KeycloakModelTest {
             return null;
         });
 
-        withRealm(realmId, (session, realm) -> {
+        withRealm(testSession, REALM_NAME, (session, realm) -> {
             ClientModel fooClient = realm.getClientByClientId("foo-client");
             UserModel john = session.users().getUserByUsername(realm, "john");
             UserConsentModel johnConsent = session.users().getConsentByClient(realm, john.getId(), fooClient.getId());
@@ -193,9 +199,11 @@ public class UserConsentModelTest extends KeycloakModelTest {
         });
     }
 
-    @Test
-    public void revokeTest() {
-        withRealm(realmId, (session, realm) -> {
+    @TestOnServer
+    public void revokeTest(KeycloakSession testSession) {
+
+        createConsents(testSession, REALM_NAME);
+        withRealm(testSession, REALM_NAME, (session, realm) -> {
             ClientModel fooClient = realm.getClientByClientId("foo-client");
             UserModel john = session.users().getUserByUsername(realm, "john");
             UserModel mary = session.users().getUserByUsername(realm, "mary");
@@ -207,7 +215,7 @@ public class UserConsentModelTest extends KeycloakModelTest {
             return null;
         });
 
-        withRealm(realmId, (session, realm) -> {
+        withRealm(testSession, REALM_NAME, (session, realm) -> {
             ClientModel fooClient = realm.getClientByClientId("foo-client");
             ClientModel hardcodedClient = session.clients().getClientByClientId(realm, "hardcoded-client");
 
@@ -220,11 +228,13 @@ public class UserConsentModelTest extends KeycloakModelTest {
         });
     }
 
-    @Test
-    public void deleteUserTest() {
+    @TestOnServer
+    public void deleteUserTest(KeycloakSession testSession) {
+
+        createConsents(testSession, REALM_NAME);
         AtomicReference<String> johnUserID = new AtomicReference<>();
 
-        withRealm(realmId, (session, realm) -> {
+        withRealm(testSession, REALM_NAME, (session, realm) -> {
             UserModel john = session.users().getUserByUsername(realm, "john");
             johnUserID.set(john.getId());
             session.users().removeUser(realm, john);
@@ -232,7 +242,7 @@ public class UserConsentModelTest extends KeycloakModelTest {
             return null;
         });
 
-        withRealm(realmId, (session, realm) -> {
+        withRealm(testSession, REALM_NAME, (session, realm) -> {
             Assert.assertEquals(
                     0,
                     session.users().getConsentsStream(realm, johnUserID.get()).count());
@@ -245,16 +255,18 @@ public class UserConsentModelTest extends KeycloakModelTest {
         });
     }
 
-    @Test
-    public void deleteClientScopeTest() {
-        withRealm(realmId, (session, realm) -> {
-            ClientScopeModel fooScope = KeycloakModelUtils.getClientScopeByName(realm, "foo");
+    @TestOnServer
+    public void deleteClientScopeTest(KeycloakSession testSession) {
+
+        createConsents(testSession, REALM_NAME);
+        withRealm(testSession, REALM_NAME, (session, realm) -> {
+            ClientScopeModel fooScope = getClientScopeByName(realm, "foo");
             realm.removeClientScope(fooScope.getId());
 
             return null;
         });
 
-        withRealm(realmId, (session, realm) -> {
+        withRealm(testSession, REALM_NAME, (session, realm) -> {
             ClientModel fooClient = realm.getClientByClientId("foo-client");
 
             UserModel john = session.users().getUserByUsername(realm, "john");
@@ -266,11 +278,13 @@ public class UserConsentModelTest extends KeycloakModelTest {
         });
     }
 
-    @Test
-    public void deleteClientTest() {
+    @TestOnServer
+    public void deleteClientTest(KeycloakSession testSession) {
+
+        createConsents(testSession, REALM_NAME);
         AtomicReference<String> barClientID = new AtomicReference<>();
 
-        withRealm(realmId, (session, realm) -> {
+        withRealm(testSession, REALM_NAME, (session, realm) -> {
             ClientModel barClient = realm.getClientByClientId("bar-client");
             barClientID.set(barClient.getId());
 
@@ -280,7 +294,7 @@ public class UserConsentModelTest extends KeycloakModelTest {
             return null;
         });
 
-        withRealm(realmId, (session, realm) -> {
+        withRealm(testSession, REALM_NAME, (session, realm) -> {
             ClientModel fooClient = realm.getClientByClientId("foo-client");
             UserModel john = session.users().getUserByUsername(realm, "john");
 
@@ -293,5 +307,26 @@ public class UserConsentModelTest extends KeycloakModelTest {
 
             return null;
         });
+    }
+
+    public static class UserConsentRealmConfig implements RealmConfig {
+        @Override
+        public RealmConfigBuilder configure(RealmConfigBuilder realm) {
+            realm.addClient("foo-client");
+            realm.addClient("bar-client");
+            realm.addClient("hardcoded-client");
+            realm.addUser("john");
+            realm.addUser("mary");
+            realm.addClientScope(clientScope("foo"));
+            realm.addClientScope(clientScope("bar"));
+            return realm;
+        }
+
+        private static ClientScopeRepresentation clientScope(String name) {
+            ClientScopeRepresentation rep = new ClientScopeRepresentation();
+            rep.setName(name);
+            rep.setProtocol(OIDCLoginProtocol.LOGIN_PROTOCOL);
+            return rep;
+        }
     }
 }

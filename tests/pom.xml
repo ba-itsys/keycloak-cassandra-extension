@@ -24,12 +24,24 @@
     <surefire.system.args/>
   </properties>
 
+  <dependencyManagement>
+    <dependencies>
+      <dependency>
+        <groupId>org.keycloak.testframework</groupId>
+        <artifactId>keycloak-test-framework-bom</artifactId>
+        <version>${keycloak.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+    </dependencies>
+  </dependencyManagement>
+
   <dependencies>
     <dependency>
       <groupId>junit</groupId>
       <artifactId>junit</artifactId>
       <version>4.13.2</version>
-      <scope>compile</scope>
+      <scope>test</scope>
     </dependency>
     <dependency>
       <groupId>org.hamcrest</groupId>
@@ -82,6 +94,26 @@
       <groupId>org.keycloak</groupId>
       <artifactId>keycloak-model-storage-private</artifactId>
       <version>${keycloak.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.keycloak.testframework</groupId>
+      <artifactId>keycloak-test-framework-core</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.keycloak.testframework</groupId>
+      <artifactId>keycloak-test-framework-remote</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.keycloak.testframework</groupId>
+      <artifactId>keycloak-test-framework-remote-providers</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.keycloak.testframework</groupId>
+      <artifactId>keycloak-test-framework-junit5-config</artifactId>
+      <scope>test</scope>
     </dependency>
 
     <dependency>
@@ -148,31 +180,24 @@
         <version>3.5.5</version>
         <configuration>
           <forkMode>once</forkMode>
-          <argLine>@{argLine}</argLine>
+          <argLine>@{argLine} -Djava.awt.headless=true ${surefire.memory.settings} ${surefire.system.args}
+            -Duser.language=en -Duser.region=US
+            -Djava.util.logging.manager=org.jboss.logmanager.LogManager
+            -Djava.util.concurrent.ForkJoinPool.common.threadFactory=io.quarkus.bootstrap.forkjoin.QuarkusForkJoinWorkerThreadFactory
+            --add-opens=java.base/java.lang=ALL-UNNAMED
+            --add-opens=java.base/java.util=ALL-UNNAMED
+            --add-opens=java.base/java.lang.invoke=ALL-UNNAMED</argLine>
           <runOrder>alphabetical</runOrder>
           <failIfNoSpecifiedTests>false</failIfNoSpecifiedTests>
           <parallelTestsTimeoutInSeconds>360</parallelTestsTimeoutInSeconds>
           <systemPropertyVariables>
-            <!-- keycloak.model.parameters lists parameter classes from
-                                         org.keycloak.model.parameters package and determine enabled providers -->
-            <kc.community.datastore.cassandra.enabled>true</kc.community.datastore.cassandra.enabled>
-            <keycloak.model.parameters>Map,CassandraMapStorage</keycloak.model.parameters>
             <log4j.configuration>file:${project.build.directory}/test-classes/log4j.properties</log4j.configuration>
-            <!-- for the logging to properly work with tests in the 'other' module -->
-            <keycloak.profile.feature.authorization>disabled</keycloak.profile.feature.authorization>
-            <keycloak.profile.feature.organization>disabled</keycloak.profile.feature.organization>
-            <keycloak.profile.feature.admin_fine_grained_authz>disabled</keycloak.profile.feature.admin_fine_grained_authz>
             <java.util.logging.manager>org.jboss.logmanager.LogManager</java.util.logging.manager>
             <org.jboss.logging.provider>log4j</org.jboss.logging.provider>
-            <argLine>-Djava.awt.headless=true ${surefire.memory.settings} ${surefire.system.args}
-                            -Duser.language=en -Duser.region=US</argLine>
           </systemPropertyVariables>
-          <properties>
-            <property>
-              <name>listener</name>
-              <value>de.arbeitsagentur.opdt.keycloak.cassandra.testsuite.AfterSuiteListener</value>
-            </property>
-          </properties>
+          <environmentVariables>
+            <KC_COMMUNITY_DATASTORE_CASSANDRA_ENABLED>true</KC_COMMUNITY_DATASTORE_CASSANDRA_ENABLED>
+          </environmentVariables>
         </configuration>
       </plugin>
       <plugin>

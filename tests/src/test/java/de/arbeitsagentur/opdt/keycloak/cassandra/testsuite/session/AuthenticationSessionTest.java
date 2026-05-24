@@ -17,15 +17,15 @@
 
 package de.arbeitsagentur.opdt.keycloak.cassandra.testsuite.session;
 
-import static de.arbeitsagentur.opdt.keycloak.cassandra.testsuite.session.SessionTestUtils.createClients;
+import static de.arbeitsagentur.opdt.keycloak.cassandra.testsuite.session.SessionTestUtils.configureSessionClients;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.hamcrest.Matchers.hasSize;
 import static org.junit.Assert.assertNull;
 
-import de.arbeitsagentur.opdt.keycloak.cassandra.testsuite.KeycloakModelTest;
-import de.arbeitsagentur.opdt.keycloak.cassandra.testsuite.parameters.ProfileTestUtils;
+import de.arbeitsagentur.opdt.keycloak.cassandra.testsuite.CassandraModelTest;
+import de.arbeitsagentur.opdt.keycloak.cassandra.testsuite.cassandra.CassandraTransientUsersKeycloakServerConfig;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
@@ -33,83 +33,82 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import org.hamcrest.Matchers;
 import org.junit.Assert;
-import org.junit.Test;
 import org.keycloak.common.util.Time;
 import org.keycloak.models.*;
+import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.light.LightweightUserAdapter;
 import org.keycloak.sessions.AuthenticationSessionModel;
 import org.keycloak.sessions.CommonClientSessionModel;
 import org.keycloak.sessions.RootAuthenticationSessionModel;
+import org.keycloak.testframework.annotations.InjectRealm;
+import org.keycloak.testframework.annotations.KeycloakIntegrationTest;
+import org.keycloak.testframework.injection.LifeCycle;
+import org.keycloak.testframework.realm.ManagedRealm;
+import org.keycloak.testframework.realm.RealmConfig;
+import org.keycloak.testframework.realm.RealmConfigBuilder;
+import org.keycloak.testframework.remote.annotations.TestOnServer;
 
-public class AuthenticationSessionTest extends KeycloakModelTest {
+@KeycloakIntegrationTest(config = CassandraTransientUsersKeycloakServerConfig.class)
+public class AuthenticationSessionTest extends CassandraModelTest {
+    private static final String REALM_NAME = "authentication-session";
 
-    private String realmId;
+    @InjectRealm(ref = REALM_NAME, lifecycle = LifeCycle.METHOD, config = AuthenticationSessionRealmConfig.class)
+    ManagedRealm managedRealm;
 
-    @Override
-    public void createEnvironment(KeycloakSession s) {
-        RealmModel realm = createRealm(s, "test");
-        realm.setDefaultRole(
-                s.roles().addRealmRole(realm, Constants.DEFAULT_ROLES_ROLE_PREFIX + "-" + realm.getName()));
-        realm.setAccessCodeLifespanLogin(1800);
+    @TestOnServer
+    public void testLimitAuthSessions(KeycloakSession testSession) {
+        try {
+            AtomicReference<String> rootAuthSessionId = new AtomicReference<>();
+            List<String> tabIds = withRealm(testSession, REALM_NAME, (session, realm) -> {
+                RootAuthenticationSessionModel ras =
+                        session.authenticationSessions().createRootAuthenticationSession(realm);
+                rootAuthSessionId.set(ras.getId());
+                ClientModel client = realm.getClientByClientId("test-app");
+                return IntStream.range(0, 300)
+                        .mapToObj(i -> {
+                            Time.setOffset(i);
+                            return ras.createAuthenticationSession(client);
+                        })
+                        .map(AuthenticationSessionModel::getTabId)
+                        .collect(Collectors.toList());
+            });
 
-        this.realmId = realm.getId();
+            String tabId = withRealm(testSession, REALM_NAME, (session, realm) -> {
+                RootAuthenticationSessionModel ras =
+                        session.authenticationSessions().getRootAuthenticationSession(realm, rootAuthSessionId.get());
+                ClientModel client = realm.getClientByClientId("test-app");
 
-        createClients(s, realm);
+                // create 301st auth session
+                return ras.createAuthenticationSession(client).getTabId();
+            });
+
+            withRealm(testSession, REALM_NAME, (session, realm) -> {
+                RootAuthenticationSessionModel ras =
+                        session.authenticationSessions().getRootAuthenticationSession(realm, rootAuthSessionId.get());
+                ClientModel client = realm.getClientByClientId("test-app");
+
+                assertThat(ras.getAuthenticationSessions(), Matchers.aMapWithSize(300));
+
+                Assert.assertEquals(
+                        tabId, ras.getAuthenticationSession(client, tabId).getTabId());
+                Assert.assertEquals(
+                        ras, ras.getAuthenticationSession(client, tabId).getParentSession());
+
+                // assert the first authentication session was deleted
+                assertNull(ras.getAuthenticationSession(client, tabIds.get(0)));
+
+                return null;
+            });
+        } finally {
+            Time.setOffset(0);
+        }
     }
 
-    @Override
-    public void cleanEnvironment(KeycloakSession s) {
-        s.realms().removeRealm(realmId);
-    }
+    @TestOnServer
+    public void testAuthSessions(KeycloakSession testSession) {
 
-    @Test
-    public void testLimitAuthSessions() {
         AtomicReference<String> rootAuthSessionId = new AtomicReference<>();
-        List<String> tabIds = withRealm(realmId, (session, realm) -> {
-            RootAuthenticationSessionModel ras =
-                    session.authenticationSessions().createRootAuthenticationSession(realm);
-            rootAuthSessionId.set(ras.getId());
-            ClientModel client = realm.getClientByClientId("test-app");
-            return IntStream.range(0, 300)
-                    .mapToObj(i -> {
-                        Time.setOffset(i);
-                        return ras.createAuthenticationSession(client);
-                    })
-                    .map(AuthenticationSessionModel::getTabId)
-                    .collect(Collectors.toList());
-        });
-
-        String tabId = withRealm(realmId, (session, realm) -> {
-            RootAuthenticationSessionModel ras =
-                    session.authenticationSessions().getRootAuthenticationSession(realm, rootAuthSessionId.get());
-            ClientModel client = realm.getClientByClientId("test-app");
-
-            // create 301st auth session
-            return ras.createAuthenticationSession(client).getTabId();
-        });
-
-        withRealm(realmId, (session, realm) -> {
-            RootAuthenticationSessionModel ras =
-                    session.authenticationSessions().getRootAuthenticationSession(realm, rootAuthSessionId.get());
-            ClientModel client = realm.getClientByClientId("test-app");
-
-            assertThat(ras.getAuthenticationSessions(), Matchers.aMapWithSize(300));
-
-            Assert.assertEquals(
-                    tabId, ras.getAuthenticationSession(client, tabId).getTabId());
-            Assert.assertEquals(ras, ras.getAuthenticationSession(client, tabId).getParentSession());
-
-            // assert the first authentication session was deleted
-            assertNull(ras.getAuthenticationSession(client, tabIds.get(0)));
-
-            return null;
-        });
-    }
-
-    @Test
-    public void testAuthSessions() {
-        AtomicReference<String> rootAuthSessionId = new AtomicReference<>();
-        List<String> tabIds = withRealm(realmId, (session, realm) -> {
+        List<String> tabIds = withRealm(testSession, REALM_NAME, (session, realm) -> {
             RootAuthenticationSessionModel rootAuthSession =
                     session.authenticationSessions().createRootAuthenticationSession(realm);
             rootAuthSessionId.set(rootAuthSession.getId());
@@ -128,7 +127,7 @@ public class AuthenticationSessionTest extends KeycloakModelTest {
                     .collect(Collectors.toList());
         });
 
-        withRealm(realmId, (session, realm) -> {
+        withRealm(testSession, REALM_NAME, (session, realm) -> {
             RootAuthenticationSessionModel rootAuthSession =
                     session.authenticationSessions().getRootAuthenticationSession(realm, rootAuthSessionId.get());
             Assert.assertNotNull(rootAuthSession);
@@ -156,7 +155,7 @@ public class AuthenticationSessionTest extends KeycloakModelTest {
             return null;
         });
 
-        withRealm(realmId, (session, realm) -> {
+        withRealm(testSession, REALM_NAME, (session, realm) -> {
             RootAuthenticationSessionModel rootAuthSession =
                     session.authenticationSessions().getRootAuthenticationSession(realm, rootAuthSessionId.get());
             Assert.assertNotNull(rootAuthSession);
@@ -175,7 +174,7 @@ public class AuthenticationSessionTest extends KeycloakModelTest {
             return null;
         });
 
-        withRealm(realmId, (session, realm) -> {
+        withRealm(testSession, REALM_NAME, (session, realm) -> {
             RootAuthenticationSessionModel rootAuthSession =
                     session.authenticationSessions().getRootAuthenticationSession(realm, rootAuthSessionId.get());
             assertNull(rootAuthSession);
@@ -184,42 +183,47 @@ public class AuthenticationSessionTest extends KeycloakModelTest {
         });
     }
 
-    @Test
-    public void testRemoveExpiredAuthSessions() {
-        AtomicReference<String> rootAuthSessionId = new AtomicReference<>();
-        withRealm(realmId, (session, realm) -> {
-            RootAuthenticationSessionModel rootAuthSession =
-                    session.authenticationSessions().createRootAuthenticationSession(realm);
-            ClientModel client = realm.getClientByClientId("test-app");
-            rootAuthSession.createAuthenticationSession(client);
-            rootAuthSessionId.set(rootAuthSession.getId());
+    @TestOnServer
+    public void testRemoveExpiredAuthSessions(KeycloakSession testSession) {
+        try {
+            AtomicReference<String> rootAuthSessionId = new AtomicReference<>();
+            withRealm(testSession, REALM_NAME, (session, realm) -> {
+                RootAuthenticationSessionModel rootAuthSession =
+                        session.authenticationSessions().createRootAuthenticationSession(realm);
+                ClientModel client = realm.getClientByClientId("test-app");
+                rootAuthSession.createAuthenticationSession(client);
+                rootAuthSessionId.set(rootAuthSession.getId());
 
-            return null;
-        });
+                return null;
+            });
 
-        withRealm(realmId, (session, realm) -> {
-            RootAuthenticationSessionModel rootAuthSession =
-                    session.authenticationSessions().getRootAuthenticationSession(realm, rootAuthSessionId.get());
-            Assert.assertNotNull(rootAuthSession);
+            withRealm(testSession, REALM_NAME, (session, realm) -> {
+                RootAuthenticationSessionModel rootAuthSession =
+                        session.authenticationSessions().getRootAuthenticationSession(realm, rootAuthSessionId.get());
+                Assert.assertNotNull(rootAuthSession);
 
-            Time.setOffset(1900);
+                Time.setOffset(1900);
 
-            return null;
-        });
+                return null;
+            });
 
-        withRealm(realmId, (session, realm) -> {
-            RootAuthenticationSessionModel rootAuthSession =
-                    session.authenticationSessions().getRootAuthenticationSession(realm, rootAuthSessionId.get());
-            assertNull(rootAuthSession);
+            withRealm(testSession, REALM_NAME, (session, realm) -> {
+                RootAuthenticationSessionModel rootAuthSession =
+                        session.authenticationSessions().getRootAuthenticationSession(realm, rootAuthSessionId.get());
+                assertNull(rootAuthSession);
 
-            return null;
-        });
+                return null;
+            });
+        } finally {
+            Time.setOffset(0);
+        }
     }
 
-    @Test
-    public void testRemoveAuthSession() {
+    @TestOnServer
+    public void testRemoveAuthSession(KeycloakSession testSession) {
+
         AtomicReference<String> rootAuthSessionId = new AtomicReference<>();
-        withRealm(realmId, (session, realm) -> {
+        withRealm(testSession, REALM_NAME, (session, realm) -> {
             RootAuthenticationSessionModel rootAuthSession =
                     session.authenticationSessions().createRootAuthenticationSession(realm);
             ClientModel client = realm.getClientByClientId("test-app");
@@ -230,7 +234,7 @@ public class AuthenticationSessionTest extends KeycloakModelTest {
             return null;
         });
 
-        withRealm(realmId, (session, realm) -> {
+        withRealm(testSession, REALM_NAME, (session, realm) -> {
             RootAuthenticationSessionModel rootAuthSession =
                     session.authenticationSessions().getRootAuthenticationSession(realm, rootAuthSessionId.get());
             Assert.assertNotNull(rootAuthSession);
@@ -247,7 +251,7 @@ public class AuthenticationSessionTest extends KeycloakModelTest {
             return null;
         });
 
-        withRealm(realmId, (session, realm) -> {
+        withRealm(testSession, REALM_NAME, (session, realm) -> {
             RootAuthenticationSessionModel rootAuthSession =
                     session.authenticationSessions().getRootAuthenticationSession(realm, rootAuthSessionId.get());
             Assert.assertNotNull(rootAuthSession);
@@ -264,7 +268,7 @@ public class AuthenticationSessionTest extends KeycloakModelTest {
             return null;
         });
 
-        withRealm(realmId, (session, realm) -> {
+        withRealm(testSession, REALM_NAME, (session, realm) -> {
             RootAuthenticationSessionModel rootAuthSession =
                     session.authenticationSessions().getRootAuthenticationSession(realm, rootAuthSessionId.get());
             Assert.assertNull(rootAuthSession);
@@ -273,10 +277,11 @@ public class AuthenticationSessionTest extends KeycloakModelTest {
         });
     }
 
-    @Test
-    public void testRemoveRootAuthSession() {
+    @TestOnServer
+    public void testRemoveRootAuthSession(KeycloakSession testSession) {
+
         AtomicReference<String> rootAuthSessionId = new AtomicReference<>();
-        withRealm(realmId, (session, realm) -> {
+        withRealm(testSession, REALM_NAME, (session, realm) -> {
             RootAuthenticationSessionModel rootAuthSession =
                     session.authenticationSessions().createRootAuthenticationSession(realm);
             ClientModel client = realm.getClientByClientId("test-app");
@@ -286,7 +291,7 @@ public class AuthenticationSessionTest extends KeycloakModelTest {
             return null;
         });
 
-        withRealm(realmId, (session, realm) -> {
+        withRealm(testSession, REALM_NAME, (session, realm) -> {
             RootAuthenticationSessionModel rootAuthSession =
                     session.authenticationSessions().getRootAuthenticationSession(realm, rootAuthSessionId.get());
             Assert.assertNotNull(rootAuthSession);
@@ -296,7 +301,7 @@ public class AuthenticationSessionTest extends KeycloakModelTest {
             return null;
         });
 
-        withRealm(realmId, (session, realm) -> {
+        withRealm(testSession, REALM_NAME, (session, realm) -> {
             RootAuthenticationSessionModel rootAuthSession =
                     session.authenticationSessions().getRootAuthenticationSession(realm, rootAuthSessionId.get());
             Assert.assertNull(rootAuthSession);
@@ -305,9 +310,10 @@ public class AuthenticationSessionTest extends KeycloakModelTest {
         });
     }
 
-    @Test
-    public void testAuthSessionProperties() {
-        String rootSessionId = withRealm(realmId, (session, realm) -> {
+    @TestOnServer
+    public void testAuthSessionProperties(KeycloakSession testSession) {
+
+        String rootSessionId = withRealm(testSession, REALM_NAME, (session, realm) -> {
             UserModel user = session.users().addUser(realm, "testuser");
             RootAuthenticationSessionModel rootAuthSession =
                     session.authenticationSessions().createRootAuthenticationSession(realm);
@@ -332,7 +338,7 @@ public class AuthenticationSessionTest extends KeycloakModelTest {
             return rootAuthSession.getId();
         });
 
-        withRealm(realmId, (session, realm) -> {
+        withRealm(testSession, REALM_NAME, (session, realm) -> {
             ClientModel client = realm.getClientByClientId("test-app");
             RootAuthenticationSessionModel rootAuthSession =
                     session.authenticationSessions().getRootAuthenticationSession(realm, rootSessionId);
@@ -373,7 +379,7 @@ public class AuthenticationSessionTest extends KeycloakModelTest {
             return null;
         });
 
-        withRealm(realmId, (session, realm) -> {
+        withRealm(testSession, REALM_NAME, (session, realm) -> {
             RootAuthenticationSessionModel rootAuthSession =
                     session.authenticationSessions().getRootAuthenticationSession(realm, rootSessionId);
             assertThat(rootAuthSession.getAuthenticationSessions().entrySet(), hasSize(1));
@@ -405,7 +411,7 @@ public class AuthenticationSessionTest extends KeycloakModelTest {
             return null;
         });
 
-        withRealm(realmId, (session, realm) -> {
+        withRealm(testSession, REALM_NAME, (session, realm) -> {
             RootAuthenticationSessionModel rootAuthSession =
                     session.authenticationSessions().getRootAuthenticationSession(realm, rootSessionId);
             assertThat(rootAuthSession.getAuthenticationSessions().entrySet(), hasSize(1));
@@ -427,11 +433,10 @@ public class AuthenticationSessionTest extends KeycloakModelTest {
         });
     }
 
-    @Test
-    public void testAuthSessionPropertiesTransientUsers() {
-        ProfileTestUtils.enableTransientUsers();
+    @TestOnServer
+    public void testAuthSessionPropertiesTransientUsers(KeycloakSession testSession) {
 
-        String rootSessionId = withRealm(realmId, (session, realm) -> {
+        String rootSessionId = withRealm(testSession, REALM_NAME, (session, realm) -> {
             LightweightUserAdapter lightweightUserAdapter = new LightweightUserAdapter(session, null);
             lightweightUserAdapter.setUsername("testuser");
 
@@ -458,7 +463,7 @@ public class AuthenticationSessionTest extends KeycloakModelTest {
             return rootAuthSession.getId();
         });
 
-        withRealm(realmId, (session, realm) -> {
+        withRealm(testSession, REALM_NAME, (session, realm) -> {
             ClientModel client = realm.getClientByClientId("test-app");
             RootAuthenticationSessionModel rootAuthSession =
                     session.authenticationSessions().getRootAuthenticationSession(realm, rootSessionId);
@@ -499,7 +504,7 @@ public class AuthenticationSessionTest extends KeycloakModelTest {
             return null;
         });
 
-        withRealm(realmId, (session, realm) -> {
+        withRealm(testSession, REALM_NAME, (session, realm) -> {
             RootAuthenticationSessionModel rootAuthSession =
                     session.authenticationSessions().getRootAuthenticationSession(realm, rootSessionId);
             assertThat(rootAuthSession.getAuthenticationSessions().entrySet(), hasSize(1));
@@ -531,7 +536,7 @@ public class AuthenticationSessionTest extends KeycloakModelTest {
             return null;
         });
 
-        withRealm(realmId, (session, realm) -> {
+        withRealm(testSession, REALM_NAME, (session, realm) -> {
             RootAuthenticationSessionModel rootAuthSession =
                     session.authenticationSessions().getRootAuthenticationSession(realm, rootSessionId);
             assertThat(rootAuthSession.getAuthenticationSessions().entrySet(), hasSize(1));
@@ -551,5 +556,13 @@ public class AuthenticationSessionTest extends KeycloakModelTest {
 
             return null;
         });
+    }
+
+    public static class AuthenticationSessionRealmConfig implements RealmConfig {
+        @Override
+        public RealmConfigBuilder configure(RealmConfigBuilder realm) {
+            realm.update(rep -> rep.setAccessCodeLifespanLogin(1800));
+            return configureSessionClients(realm);
+        }
     }
 }

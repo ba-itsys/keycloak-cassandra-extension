@@ -1,6 +1,6 @@
 package de.arbeitsagentur.opdt.keycloak.cassandra.testsuite;
 
-import static org.junit.Assert.*;
+import static org.junit.jupiter.api.Assertions.*;
 
 import de.arbeitsagentur.opdt.keycloak.cassandra.clientScope.persistence.entities.ClientScopeValue;
 import de.arbeitsagentur.opdt.keycloak.cassandra.clientScope.persistence.entities.ClientScopes;
@@ -8,7 +8,7 @@ import de.arbeitsagentur.opdt.keycloak.cassandra.group.persistence.entities.Grou
 import de.arbeitsagentur.opdt.keycloak.cassandra.group.persistence.entities.Groups;
 import de.arbeitsagentur.opdt.keycloak.cassandra.role.persistence.entities.RoleValue;
 import de.arbeitsagentur.opdt.keycloak.cassandra.role.persistence.entities.Roles;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 public class PersistenceEntitiesNullSafetyTest {
 

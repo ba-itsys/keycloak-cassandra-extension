@@ -19,45 +19,40 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.*;
 import static org.hamcrest.Matchers.empty;
 
+import de.arbeitsagentur.opdt.keycloak.cassandra.testsuite.cassandra.CassandraKeycloakServerConfig;
 import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.junit.Assert;
-import org.junit.Test;
 import org.keycloak.models.*;
+import org.keycloak.models.KeycloakSession;
+import org.keycloak.representations.idm.GroupRepresentation;
+import org.keycloak.testframework.annotations.InjectRealm;
+import org.keycloak.testframework.annotations.KeycloakIntegrationTest;
+import org.keycloak.testframework.injection.LifeCycle;
+import org.keycloak.testframework.realm.ManagedRealm;
+import org.keycloak.testframework.realm.RealmConfig;
+import org.keycloak.testframework.realm.RealmConfigBuilder;
+import org.keycloak.testframework.remote.annotations.TestOnServer;
 
-public class GroupModelTest extends KeycloakModelTest {
-    private String realmId;
-    private String firstGroupId;
-    private String secondGroupId;
-    private String thirdGroupId;
+@KeycloakIntegrationTest(config = CassandraKeycloakServerConfig.class)
+public class GroupModelTest extends CassandraModelTest {
+    private static final String REALM_NAME = "group-model";
+    private static final String FIRST_GROUP_ID = "FIRST_GROUP_ID";
+    private static final String SECOND_GROUP_ID = "SECOND_GROUP_ID";
+    private static final String THIRD_GROUP_ID = "THIRD_GROUP_ID";
+
+    @InjectRealm(ref = REALM_NAME, lifecycle = LifeCycle.METHOD, config = GroupModelRealmConfig.class)
+    ManagedRealm managedRealm;
+
     private static final String OLD_VALUE = "oldValue";
     private static final String NEW_VALUE = "newValue";
 
-    @Override
-    public void createEnvironment(KeycloakSession s) {
-        RealmModel realm = s.realms().createRealm("original");
-        realm.setDefaultRole(
-                s.roles().addRealmRole(realm, Constants.DEFAULT_ROLES_ROLE_PREFIX + "-" + realm.getName()));
-        realmId = realm.getId();
+    @TestOnServer
+    public void testGroupUniqueness(KeycloakSession testSession) {
 
-        UserModel john = s.users().addUser(realm, "john");
-        UserModel mary = s.users().addUser(realm, "mary");
-
-        firstGroupId = s.groups().createGroup(realm, "firstGroup").getId();
-        secondGroupId = s.groups().createGroup(realm, "secondGroup").getId();
-        thirdGroupId = s.groups().createGroup(realm, "thirdGroup").getId();
-    }
-
-    @Override
-    public void cleanEnvironment(KeycloakSession s) {
-        s.realms().removeRealm(realmId);
-    }
-
-    @Test
-    public void testGroupUniqueness() {
-        withRealm(realmId, (session, realm) -> {
-            GroupModel secondGroup = session.groups().getGroupById(realm, secondGroupId);
+        withRealm(testSession, REALM_NAME, (session, realm) -> {
+            GroupModel secondGroup = session.groups().getGroupById(realm, SECOND_GROUP_ID);
 
             GroupProvider groupProvider = session.groups();
             Assert.assertThrows(ModelDuplicateException.class, () -> groupProvider.createGroup(realm, "firstGroup"));
@@ -70,10 +65,11 @@ public class GroupModelTest extends KeycloakModelTest {
         });
     }
 
-    @Test
-    public void testBasicCreateRemoveGroup() {
-        withRealm(realmId, (session, realm) -> {
-            GroupModel secondGroup = session.groups().getGroupById(realm, secondGroupId);
+    @TestOnServer
+    public void testBasicCreateRemoveGroup(KeycloakSession testSession) {
+
+        withRealm(testSession, REALM_NAME, (session, realm) -> {
+            GroupModel secondGroup = session.groups().getGroupById(realm, SECOND_GROUP_ID);
 
             GroupModel subGroup = session.groups().createGroup(realm, "firstGroup", secondGroup);
 
@@ -94,10 +90,11 @@ public class GroupModelTest extends KeycloakModelTest {
         });
     }
 
-    @Test
-    public void testBasicGroupModel() {
-        withRealm(realmId, (session, realm) -> {
-            GroupModel firstGroup = session.groups().getGroupById(realm, firstGroupId);
+    @TestOnServer
+    public void testBasicGroupModel(KeycloakSession testSession) {
+
+        withRealm(testSession, REALM_NAME, (session, realm) -> {
+            GroupModel firstGroup = session.groups().getGroupById(realm, FIRST_GROUP_ID);
             firstGroup.setName("veryFirstGroup");
 
             firstGroup.setSingleAttribute("key1", "value1");
@@ -106,8 +103,8 @@ public class GroupModelTest extends KeycloakModelTest {
             return null;
         });
 
-        withRealm(realmId, (session, realm) -> {
-            GroupModel firstGroup = session.groups().getGroupById(realm, firstGroupId);
+        withRealm(testSession, REALM_NAME, (session, realm) -> {
+            GroupModel firstGroup = session.groups().getGroupById(realm, FIRST_GROUP_ID);
             Assert.assertEquals("veryFirstGroup", firstGroup.getName());
 
             Assert.assertEquals(2, firstGroup.getAttributes().size());
@@ -119,38 +116,39 @@ public class GroupModelTest extends KeycloakModelTest {
             return null;
         });
 
-        withRealm(realmId, (session, realm) -> {
-            GroupModel firstGroup = session.groups().getGroupById(realm, firstGroupId);
+        withRealm(testSession, REALM_NAME, (session, realm) -> {
+            GroupModel firstGroup = session.groups().getGroupById(realm, FIRST_GROUP_ID);
             Assert.assertEquals(1, firstGroup.getAttributes().size());
             return null;
         });
     }
 
-    @Test
-    public void testAddRemoveGroupChild() {
-        withRealm(realmId, (session, realm) -> {
-            GroupModel firstGroup = session.groups().getGroupById(realm, firstGroupId);
-            GroupModel secondGroup = session.groups().getGroupById(realm, secondGroupId);
+    @TestOnServer
+    public void testAddRemoveGroupChild(KeycloakSession testSession) {
+
+        withRealm(testSession, REALM_NAME, (session, realm) -> {
+            GroupModel firstGroup = session.groups().getGroupById(realm, FIRST_GROUP_ID);
+            GroupModel secondGroup = session.groups().getGroupById(realm, SECOND_GROUP_ID);
 
             firstGroup.addChild(secondGroup);
 
             return null;
         });
 
-        withRealm(realmId, (session, realm) -> {
-            GroupModel firstGroup = session.groups().getGroupById(realm, firstGroupId);
-            GroupModel secondGroup = session.groups().getGroupById(realm, secondGroupId);
+        withRealm(testSession, REALM_NAME, (session, realm) -> {
+            GroupModel firstGroup = session.groups().getGroupById(realm, FIRST_GROUP_ID);
+            GroupModel secondGroup = session.groups().getGroupById(realm, SECOND_GROUP_ID);
 
             Assert.assertEquals(1, firstGroup.getSubGroupsStream().count());
-            Assert.assertEquals(firstGroupId, secondGroup.getParentId());
+            Assert.assertEquals(FIRST_GROUP_ID, secondGroup.getParentId());
 
             firstGroup.removeChild(secondGroup);
 
             return null;
         });
 
-        withRealm(realmId, (session, realm) -> {
-            GroupModel firstGroup = session.groups().getGroupById(realm, firstGroupId);
+        withRealm(testSession, REALM_NAME, (session, realm) -> {
+            GroupModel firstGroup = session.groups().getGroupById(realm, FIRST_GROUP_ID);
 
             Assert.assertEquals(0, firstGroup.getSubGroupsStream().count());
 
@@ -158,11 +156,12 @@ public class GroupModelTest extends KeycloakModelTest {
         });
     }
 
-    @Test
-    public void testGroupRoleMapping() {
-        withRealm(realmId, (session, realm) -> {
-            GroupModel firstGroup = session.groups().getGroupById(realm, firstGroupId);
-            GroupModel secondGroup = session.groups().getGroupById(realm, secondGroupId);
+    @TestOnServer
+    public void testGroupRoleMapping(KeycloakSession testSession) {
+
+        withRealm(testSession, REALM_NAME, (session, realm) -> {
+            GroupModel firstGroup = session.groups().getGroupById(realm, FIRST_GROUP_ID);
+            GroupModel secondGroup = session.groups().getGroupById(realm, SECOND_GROUP_ID);
 
             ClientModel client = session.clients().addClient(realm, "client-id");
 
@@ -183,9 +182,9 @@ public class GroupModelTest extends KeycloakModelTest {
             return null;
         });
 
-        withRealm(realmId, (session, realm) -> {
-            GroupModel firstGroup = session.groups().getGroupById(realm, firstGroupId);
-            GroupModel secondGroup = session.groups().getGroupById(realm, secondGroupId);
+        withRealm(testSession, REALM_NAME, (session, realm) -> {
+            GroupModel firstGroup = session.groups().getGroupById(realm, FIRST_GROUP_ID);
+            GroupModel secondGroup = session.groups().getGroupById(realm, SECOND_GROUP_ID);
             ClientModel client = session.clients().getClientByClientId(realm, "client-id");
 
             Assert.assertEquals(2, firstGroup.getRealmRoleMappingsStream().count());
@@ -210,9 +209,10 @@ public class GroupModelTest extends KeycloakModelTest {
         });
     }
 
-    @Test
-    public void testSearchForGroupByNameStream() {
-        withRealm(realmId, (session, realm) -> {
+    @TestOnServer
+    public void testSearchForGroupByNameStream(KeycloakSession testSession) {
+
+        withRealm(testSession, REALM_NAME, (session, realm) -> {
             Assert.assertEquals(
                     1,
                     session.groups()
@@ -260,9 +260,10 @@ public class GroupModelTest extends KeycloakModelTest {
         });
     }
 
-    @Test
-    public void testSearchForGroupByNameStreamHandlesNullSearch() {
-        withRealm(realmId, (session, realm) -> {
+    @TestOnServer
+    public void testSearchForGroupByNameStreamHandlesNullSearch(KeycloakSession testSession) {
+
+        withRealm(testSession, REALM_NAME, (session, realm) -> {
             Assert.assertThrows(IllegalArgumentException.class, () -> session.groups()
                     .searchForGroupByNameStream(realm, null, null, null, null)
                     .count());
@@ -274,17 +275,18 @@ public class GroupModelTest extends KeycloakModelTest {
         });
     }
 
-    @Test
-    public void testSearchByNameWithHierarchy() {
-        withRealm(realmId, (session, realm) -> {
+    @TestOnServer
+    public void testSearchByNameWithHierarchy(KeycloakSession testSession) {
+
+        withRealm(testSession, REALM_NAME, (session, realm) -> {
             session.groups()
                     .createGroup(
                             realm,
                             "deepGroup",
                             session.groups()
                                     .createGroup(
-                                            realm, "subGroup", session.groups().getGroupById(realm, secondGroupId)));
-            session.groups().createGroup(realm, "subGroup", session.groups().getGroupById(realm, thirdGroupId));
+                                            realm, "subGroup", session.groups().getGroupById(realm, SECOND_GROUP_ID)));
+            session.groups().createGroup(realm, "subGroup", session.groups().getGroupById(realm, THIRD_GROUP_ID));
 
             Assert.assertEquals(
                     1,
@@ -306,66 +308,72 @@ public class GroupModelTest extends KeycloakModelTest {
         });
     }
 
-    @Test
-    public void testGetGroupsStream() {
-        withRealm(realmId, (session, realm) -> {
+    @TestOnServer
+    public void testGetGroupsStream(KeycloakSession testSession) {
+
+        withRealm(testSession, REALM_NAME, (session, realm) -> {
             Assert.assertEquals(3, session.groups().getGroupsStream(realm).count());
             Assert.assertEquals(
                     3,
                     session.groups()
                             .getGroupsStream(
-                                    realm, Stream.of(firstGroupId, secondGroupId, thirdGroupId), "", null, null)
+                                    realm, Stream.of(FIRST_GROUP_ID, SECOND_GROUP_ID, THIRD_GROUP_ID), "", null, null)
                             .count());
 
             Assert.assertEquals(
                     2,
                     session.groups()
-                            .getGroupsStream(realm, Stream.of(firstGroupId, secondGroupId), "Group", null, null)
+                            .getGroupsStream(realm, Stream.of(FIRST_GROUP_ID, SECOND_GROUP_ID), "Group", null, null)
                             .count());
             Assert.assertEquals(
                     2,
                     session.groups()
-                            .getGroupsStream(realm, Stream.of(firstGroupId, secondGroupId), "group", null, null)
+                            .getGroupsStream(realm, Stream.of(FIRST_GROUP_ID, SECOND_GROUP_ID), "group", null, null)
                             .count());
             Assert.assertEquals(
                     1,
                     session.groups()
-                            .getGroupsStream(realm, Stream.of(firstGroupId, secondGroupId), "first", null, null)
+                            .getGroupsStream(realm, Stream.of(FIRST_GROUP_ID, SECOND_GROUP_ID), "first", null, null)
                             .count());
 
             Assert.assertEquals(
                     3,
                     session.groups()
                             .getGroupsStream(
-                                    realm, Stream.of(firstGroupId, secondGroupId, thirdGroupId), "Group", null, null)
+                                    realm,
+                                    Stream.of(FIRST_GROUP_ID, SECOND_GROUP_ID, THIRD_GROUP_ID),
+                                    "Group",
+                                    null,
+                                    null)
                             .count());
             Assert.assertEquals(
                     2,
                     session.groups()
                             .getGroupsStream(
-                                    realm, Stream.of(firstGroupId, secondGroupId, thirdGroupId), "Group", -1, 2)
+                                    realm, Stream.of(FIRST_GROUP_ID, SECOND_GROUP_ID, THIRD_GROUP_ID), "Group", -1, 2)
                             .count());
             Assert.assertEquals(
                     2,
                     session.groups()
                             .getGroupsStream(
-                                    realm, Stream.of(firstGroupId, secondGroupId, thirdGroupId), "Group", 1, -1)
+                                    realm, Stream.of(FIRST_GROUP_ID, SECOND_GROUP_ID, THIRD_GROUP_ID), "Group", 1, -1)
                             .count());
             Assert.assertEquals(
                     1,
                     session.groups()
                             .getGroupsStream(
-                                    realm, Stream.of(firstGroupId, secondGroupId, thirdGroupId), "Group", 2, 10)
+                                    realm, Stream.of(FIRST_GROUP_ID, SECOND_GROUP_ID, THIRD_GROUP_ID), "Group", 2, 10)
                             .count());
 
             return null;
         });
     }
 
-    @Test
-    public void testGetGroupsCount() {
-        withRealm(realmId, (session, realm) -> {
-            session.groups().createGroup(realm, "subGroup", session.groups().getGroupById(realm, thirdGroupId));
+    @TestOnServer
+    public void testGetGroupsCount(KeycloakSession testSession) {
+
+        withRealm(testSession, REALM_NAME, (session, realm) -> {
+            session.groups().createGroup(realm, "subGroup", session.groups().getGroupById(realm, THIRD_GROUP_ID));
 
             Assert.assertEquals(3, session.groups().getGroupsCount(realm, true), 0);
             Assert.assertEquals(4, session.groups().getGroupsCount(realm, false), 0);
@@ -378,33 +386,35 @@ public class GroupModelTest extends KeycloakModelTest {
         });
     }
 
-    @Test
-    public void testGetTopLevelGroupsStream() {
-        withRealm(realmId, (session, realm) -> {
+    @TestOnServer
+    public void testGetTopLevelGroupsStream(KeycloakSession testSession) {
+
+        withRealm(testSession, REALM_NAME, (session, realm) -> {
             session.groups()
                     .moveGroup(
                             realm,
-                            session.groups().getGroupById(realm, firstGroupId),
-                            session.groups().getGroupById(realm, firstGroupId));
+                            session.groups().getGroupById(realm, FIRST_GROUP_ID),
+                            session.groups().getGroupById(realm, FIRST_GROUP_ID));
             session.groups()
                     .moveGroup(
                             realm,
-                            session.groups().getGroupById(realm, thirdGroupId),
-                            session.groups().getGroupById(realm, secondGroupId));
+                            session.groups().getGroupById(realm, THIRD_GROUP_ID),
+                            session.groups().getGroupById(realm, SECOND_GROUP_ID));
 
             return null;
         });
 
-        withRealm(realmId, (session, realm) -> {
-            Assert.assertNull(session.groups().getGroupById(realm, firstGroupId).getParentId());
+        withRealm(testSession, REALM_NAME, (session, realm) -> {
+            Assert.assertNull(
+                    session.groups().getGroupById(realm, FIRST_GROUP_ID).getParentId());
             Assert.assertEquals(
                     2, session.groups().getTopLevelGroupsStream(realm).count());
 
-            session.groups().addTopLevelGroup(realm, session.groups().getGroupById(realm, thirdGroupId));
+            session.groups().addTopLevelGroup(realm, session.groups().getGroupById(realm, THIRD_GROUP_ID));
             return null;
         });
 
-        withRealm(realmId, (session, realm) -> {
+        withRealm(testSession, REALM_NAME, (session, realm) -> {
             Assert.assertEquals(
                     3, session.groups().getTopLevelGroupsStream(realm).count());
 
@@ -418,8 +428,8 @@ public class GroupModelTest extends KeycloakModelTest {
             Assert.assertEquals(
                     1, session.groups().getTopLevelGroupsStream(realm, 2, 10).count());
 
-            GroupModel secondGroup = session.groups().getGroupById(realm, secondGroupId);
-            GroupModel thirdGroup = session.groups().getGroupById(realm, thirdGroupId);
+            GroupModel secondGroup = session.groups().getGroupById(realm, SECOND_GROUP_ID);
+            GroupModel thirdGroup = session.groups().getGroupById(realm, THIRD_GROUP_ID);
 
             GroupProvider groupProvider = session.groups();
             groupProvider.moveGroup(realm, thirdGroup, secondGroup);
@@ -432,9 +442,10 @@ public class GroupModelTest extends KeycloakModelTest {
         });
     }
 
-    @Test
-    public void testGetTopLevelGroupsStreamHandlesNullSearchAndExact() {
-        withRealm(realmId, (session, realm) -> {
+    @TestOnServer
+    public void testGetTopLevelGroupsStreamHandlesNullSearchAndExact(KeycloakSession testSession) {
+
+        withRealm(testSession, REALM_NAME, (session, realm) -> {
             Assert.assertThrows(IllegalArgumentException.class, () -> session.groups()
                     .getTopLevelGroupsStream(realm, null, null, null, null)
                     .count());
@@ -443,12 +454,13 @@ public class GroupModelTest extends KeycloakModelTest {
         });
     }
 
-    @Test
-    public void testGetGroupsByRoleStream() {
-        withRealm(realmId, (session, realm) -> {
-            GroupModel group1 = session.groups().getGroupById(realm, firstGroupId);
-            GroupModel group2 = session.groups().getGroupById(realm, secondGroupId);
-            GroupModel group3 = session.groups().getGroupById(realm, thirdGroupId);
+    @TestOnServer
+    public void testGetGroupsByRoleStream(KeycloakSession testSession) {
+
+        withRealm(testSession, REALM_NAME, (session, realm) -> {
+            GroupModel group1 = session.groups().getGroupById(realm, FIRST_GROUP_ID);
+            GroupModel group2 = session.groups().getGroupById(realm, SECOND_GROUP_ID);
+            GroupModel group3 = session.groups().getGroupById(realm, THIRD_GROUP_ID);
 
             RoleModel role1 = session.roles().addRealmRole(realm, "role1");
             RoleModel role2 = session.roles().addRealmRole(realm, "role2");
@@ -466,10 +478,10 @@ public class GroupModelTest extends KeycloakModelTest {
             return null;
         });
 
-        withRealm(realmId, (session, realm) -> {
-            GroupModel group1 = session.groups().getGroupById(realm, firstGroupId);
-            GroupModel group2 = session.groups().getGroupById(realm, secondGroupId);
-            GroupModel group3 = session.groups().getGroupById(realm, thirdGroupId);
+        withRealm(testSession, REALM_NAME, (session, realm) -> {
+            GroupModel group1 = session.groups().getGroupById(realm, FIRST_GROUP_ID);
+            GroupModel group2 = session.groups().getGroupById(realm, SECOND_GROUP_ID);
+            GroupModel group3 = session.groups().getGroupById(realm, THIRD_GROUP_ID);
 
             RoleModel role1 = session.roles().getRealmRole(realm, "role1");
             RoleModel role2 = session.roles().getRealmRole(realm, "role2");
@@ -511,17 +523,17 @@ public class GroupModelTest extends KeycloakModelTest {
             return null;
         });
 
-        withRealm(realmId, (session, realm) -> {
+        withRealm(testSession, REALM_NAME, (session, realm) -> {
             RoleModel role1 = session.roles().getRealmRole(realm, "role1");
             session.roles().removeRole(role1);
 
             return null;
         });
 
-        withRealm(realmId, (session, realm) -> {
-            GroupModel group1 = session.groups().getGroupById(realm, firstGroupId);
-            GroupModel group2 = session.groups().getGroupById(realm, secondGroupId);
-            GroupModel group3 = session.groups().getGroupById(realm, thirdGroupId);
+        withRealm(testSession, REALM_NAME, (session, realm) -> {
+            GroupModel group1 = session.groups().getGroupById(realm, FIRST_GROUP_ID);
+            GroupModel group2 = session.groups().getGroupById(realm, SECOND_GROUP_ID);
+            GroupModel group3 = session.groups().getGroupById(realm, THIRD_GROUP_ID);
 
             Assert.assertEquals(0, group1.getRealmRoleMappingsStream().count());
             Assert.assertEquals(1, group2.getRealmRoleMappingsStream().count());
@@ -531,12 +543,13 @@ public class GroupModelTest extends KeycloakModelTest {
         });
     }
 
-    @Test
-    public void testSearchGroupsByAttributes() {
-        withRealm(realmId, (session, realm) -> {
-            GroupModel group1 = session.groups().getGroupById(realm, firstGroupId);
-            GroupModel group2 = session.groups().getGroupById(realm, secondGroupId);
-            GroupModel group3 = session.groups().getGroupById(realm, thirdGroupId);
+    @TestOnServer
+    public void testSearchGroupsByAttributes(KeycloakSession testSession) {
+
+        withRealm(testSession, REALM_NAME, (session, realm) -> {
+            GroupModel group1 = session.groups().getGroupById(realm, FIRST_GROUP_ID);
+            GroupModel group2 = session.groups().getGroupById(realm, SECOND_GROUP_ID);
+            GroupModel group3 = session.groups().getGroupById(realm, THIRD_GROUP_ID);
 
             group1.setSingleAttribute("key1", "value1");
             group1.setSingleAttribute("key2", "value21");
@@ -549,10 +562,10 @@ public class GroupModelTest extends KeycloakModelTest {
             return null;
         });
 
-        withRealm(realmId, (session, realm) -> {
-            GroupModel group1 = session.groups().getGroupById(realm, firstGroupId);
-            GroupModel group2 = session.groups().getGroupById(realm, secondGroupId);
-            GroupModel group3 = session.groups().getGroupById(realm, thirdGroupId);
+        withRealm(testSession, REALM_NAME, (session, realm) -> {
+            GroupModel group1 = session.groups().getGroupById(realm, FIRST_GROUP_ID);
+            GroupModel group2 = session.groups().getGroupById(realm, SECOND_GROUP_ID);
+            GroupModel group3 = session.groups().getGroupById(realm, THIRD_GROUP_ID);
 
             Map<String, String> attributesToSearch = new HashMap<>();
 
@@ -610,15 +623,16 @@ public class GroupModelTest extends KeycloakModelTest {
         });
     }
 
-    @Test
-    public void testGroupAttributesSetter() {
-        String groupId = withRealm(realmId, (session, realm) -> {
+    @TestOnServer
+    public void testGroupAttributesSetter(KeycloakSession testSession) {
+
+        String groupId = withRealm(testSession, REALM_NAME, (session, realm) -> {
             GroupModel groupModel = session.groups().createGroup(realm, "my-group");
             groupModel.setSingleAttribute("key", OLD_VALUE);
 
             return groupModel.getId();
         });
-        withRealm(realmId, (session, realm) -> {
+        withRealm(testSession, REALM_NAME, (session, realm) -> {
             GroupModel groupModel = session.groups().getGroupById(realm, groupId);
             assertThat(groupModel.getAttributes().get("key"), contains(OLD_VALUE));
 
@@ -632,5 +646,25 @@ public class GroupModelTest extends KeycloakModelTest {
 
             return null;
         });
+    }
+
+    public static class GroupModelRealmConfig implements RealmConfig {
+        @Override
+        public RealmConfigBuilder configure(RealmConfigBuilder realm) {
+            realm.addUser("john");
+            realm.addUser("mary");
+            realm.update(rep -> rep.setGroups(List.of(
+                    group(FIRST_GROUP_ID, "firstGroup"),
+                    group(SECOND_GROUP_ID, "secondGroup"),
+                    group(THIRD_GROUP_ID, "thirdGroup"))));
+            return realm;
+        }
+
+        private static GroupRepresentation group(String id, String name) {
+            GroupRepresentation group = new GroupRepresentation();
+            group.setId(id);
+            group.setName(name);
+            return group;
+        }
     }
 }

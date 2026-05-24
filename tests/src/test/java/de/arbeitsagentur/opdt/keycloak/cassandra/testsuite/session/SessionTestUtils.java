@@ -24,26 +24,23 @@ import org.junit.Assert;
 import org.keycloak.models.*;
 import org.keycloak.models.light.LightweightUserAdapter;
 import org.keycloak.protocol.oidc.OIDCLoginProtocol;
+import org.keycloak.testframework.realm.RealmConfigBuilder;
 
 public class SessionTestUtils {
-    public static void createClients(KeycloakSession s, RealmModel realm) {
-        ClientModel clientModel = s.clients().addClient(realm, "test-app");
-        clientModel.setEnabled(true);
-        clientModel.setBaseUrl("http://localhost:8180/auth/realms/master/app/auth");
-        Set<String> redirects = new HashSet<>(Arrays.asList(
-                "http://localhost:8180/auth/realms/master/app/auth/*",
-                "https://localhost:8543/auth/realms/master/app/auth/*",
-                "http://localhost:8180/auth/realms/test/app/auth/*",
-                "https://localhost:8543/auth/realms/test/app/auth/*"));
-        clientModel.setRedirectUris(redirects);
-        clientModel.setSecret("password");
+    public static RealmConfigBuilder configureSessionRealm(RealmConfigBuilder realm) {
+        realm.ssoSessionIdleTimeout(1800)
+                .ssoSessionMaxLifespan(36000)
+                .clientSessionIdleTimeout(500)
+                .update(rep -> rep.setOfflineSessionIdleTimeout(Constants.DEFAULT_OFFLINE_SESSION_IDLE_TIMEOUT));
+        realm.addUser("user1").email("user1@localhost");
+        realm.addUser("user2").email("user2@localhost");
+        return configureSessionClients(realm);
+    }
 
-        clientModel = s.clients().addClient(realm, "third-party");
-        clientModel.setEnabled(true);
-        clientModel.setConsentRequired(true);
-        clientModel.setBaseUrl("http://localhost:8180/auth/realms/master/app/auth");
-        clientModel.setRedirectUris(redirects);
-        clientModel.setSecret("password");
+    public static RealmConfigBuilder configureSessionClients(RealmConfigBuilder realm) {
+        realm.addClient("test-app");
+        realm.addClient("third-party").consentRequired(true);
+        return realm;
     }
 
     public static UserSessionModel[] createSessionsTransientUser(KeycloakSession session, String realmId) {

@@ -17,73 +17,50 @@
 
 package de.arbeitsagentur.opdt.keycloak.cassandra.testsuite.session;
 
-import static de.arbeitsagentur.opdt.keycloak.cassandra.testsuite.session.SessionTestUtils.createClients;
+import static de.arbeitsagentur.opdt.keycloak.cassandra.testsuite.session.SessionTestUtils.configureSessionRealm;
 import static de.arbeitsagentur.opdt.keycloak.cassandra.testsuite.session.SessionTestUtils.createSessions;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.Is.is;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
-import de.arbeitsagentur.opdt.keycloak.cassandra.testsuite.KeycloakModelTest;
+import de.arbeitsagentur.opdt.keycloak.cassandra.testsuite.CassandraModelTest;
+import de.arbeitsagentur.opdt.keycloak.cassandra.testsuite.cassandra.CassandraKeycloakServerConfig;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 import org.hamcrest.Matchers;
 import org.junit.Assert;
-import org.junit.Test;
 import org.keycloak.models.*;
+import org.keycloak.models.KeycloakSession;
+import org.keycloak.testframework.annotations.InjectRealm;
+import org.keycloak.testframework.annotations.KeycloakIntegrationTest;
+import org.keycloak.testframework.injection.LifeCycle;
+import org.keycloak.testframework.realm.ManagedRealm;
+import org.keycloak.testframework.realm.RealmConfig;
+import org.keycloak.testframework.realm.RealmConfigBuilder;
+import org.keycloak.testframework.remote.annotations.TestOnServer;
 
 /**
  * @author <a href="mailto:mposolda@redhat.com">Marek Posolda</a>
  * @author <a href="mailto:mabartos@redhat.com">Martin Bartos</a>
  * @author <a href="mailto:mkanis@redhat.com">Martin Kanis</a>
  */
-public class UserSessionInitializerTest extends KeycloakModelTest {
+@KeycloakIntegrationTest(config = CassandraKeycloakServerConfig.class)
+public class UserSessionInitializerTest extends CassandraModelTest {
+    private static final String REALM_NAME = "user-session-initializer";
 
-    private String realmId;
+    @InjectRealm(ref = REALM_NAME, lifecycle = LifeCycle.METHOD, config = UserSessionInitializerRealmConfig.class)
+    ManagedRealm managedRealm;
 
-    @Override
-    public void createEnvironment(KeycloakSession s) {
-        RealmModel realm = createRealm(s, "test");
-        realm.setOfflineSessionIdleTimeout(Constants.DEFAULT_OFFLINE_SESSION_IDLE_TIMEOUT);
-        realm.setDefaultRole(
-                s.roles().addRealmRole(realm, Constants.DEFAULT_ROLES_ROLE_PREFIX + "-" + realm.getName()));
-        realm.setSsoSessionIdleTimeout(1800);
-        realm.setSsoSessionMaxLifespan(36000);
-        this.realmId = realm.getId();
+    @TestOnServer
+    public void testUserSessionInitializer(KeycloakSession testSession) {
 
-        s.users().addUser(realm, "user1").setEmail("user1@localhost");
-        s.users().addUser(realm, "user2").setEmail("user2@localhost");
-
-        createClients(s, realm);
-    }
-
-    @Override
-    public void cleanEnvironment(KeycloakSession s) {
-        RealmModel realm = s.realms().getRealm(realmId);
-        s.sessions().removeUserSessions(realm);
-
-        UserModel user1 = s.users().getUserByUsername(realm, "user1");
-        UserModel user2 = s.users().getUserByUsername(realm, "user2");
-
-        UserManager um = new UserManager(s);
-        if (user1 != null) {
-            um.removeUser(realm, user1);
-        }
-        if (user2 != null) {
-            um.removeUser(realm, user2);
-        }
-
-        s.realms().removeRealm(realmId);
-    }
-
-    @Test
-    public void testUserSessionInitializer() {
-        UserSessionModel[] origSessionIds = createSessionsInPersisterOnly();
+        UserSessionModel[] origSessionIds = createSessionsInPersisterOnly(testSession, REALM_NAME);
         int started = origSessionIds[0].getStarted();
 
-        inComittedTransaction(session -> {
-            RealmModel realm = session.realms().getRealm(realmId);
+        inCommittedTransaction(testSession, session -> {
+            RealmModel realm = session.realms().getRealmByName(REALM_NAME);
 
             // Assert sessions are in
             ClientModel testApp = realm.getClientByClientId("test-app");
@@ -130,21 +107,22 @@ public class UserSessionInitializerTest extends KeycloakModelTest {
         });
     }
 
-    @Test
-    public void testUserSessionInitializerWithDeletingClient() {
-        UserSessionModel[] origSessionIds = createSessionsInPersisterOnly();
+    @TestOnServer
+    public void testUserSessionInitializerWithDeletingClient(KeycloakSession testSession) {
+
+        UserSessionModel[] origSessionIds = createSessionsInPersisterOnly(testSession, REALM_NAME);
         int started = origSessionIds[0].getStarted();
 
-        inComittedTransaction(session -> {
-            RealmModel realm = session.realms().getRealm(realmId);
+        inCommittedTransaction(testSession, session -> {
+            RealmModel realm = session.realms().getRealmByName(REALM_NAME);
 
             // Delete one of the clients now
             ClientModel testApp = realm.getClientByClientId("test-app");
             realm.removeClient(testApp.getId());
         });
 
-        inComittedTransaction(session -> {
-            RealmModel realm = session.realms().getRealm(realmId);
+        inCommittedTransaction(testSession, session -> {
+            RealmModel realm = session.realms().getRealmByName(REALM_NAME);
 
             // Assert sessions are in
             ClientModel thirdparty = realm.getClientByClientId("third-party");
@@ -174,13 +152,13 @@ public class UserSessionInitializerTest extends KeycloakModelTest {
 
     // Create sessions in persister + infinispan, but then delete them from infinispan cache by
     // reinitializing keycloak session factory
-    private UserSessionModel[] createSessionsInPersisterOnly() {
-        UserSessionModel[] origSessions = inComittedTransaction(session -> {
-            return createSessions(session, realmId);
+    private static UserSessionModel[] createSessionsInPersisterOnly(KeycloakSession testSession, String realmName) {
+        UserSessionModel[] origSessions = inCommittedTransaction(testSession, session -> {
+            return createSessions(session, realmName);
         });
         UserSessionModel[] res = new UserSessionModel[origSessions.length];
 
-        withRealm(realmId, (session, realm) -> {
+        withRealm(testSession, realmName, (session, realm) -> {
             int i = 0;
             for (UserSessionModel origSession : origSessions) {
                 UserSessionModel userSession = session.sessions().getUserSession(realm, origSession.getId());
@@ -193,12 +171,10 @@ public class UserSessionInitializerTest extends KeycloakModelTest {
             return null;
         });
 
-        reinitializeKeycloakSessionFactory();
-
         return res;
     }
 
-    private void assertSessionLoaded(
+    private static void assertSessionLoaded(
             List<UserSessionModel> sessions,
             String id,
             UserModel user,
@@ -244,5 +220,12 @@ public class UserSessionInitializerTest extends KeycloakModelTest {
         }
 
         assertThat(actualClients, Matchers.arrayContainingInAnyOrder(clients));
+    }
+
+    public static class UserSessionInitializerRealmConfig implements RealmConfig {
+        @Override
+        public RealmConfigBuilder configure(RealmConfigBuilder realm) {
+            return configureSessionRealm(realm);
+        }
     }
 }

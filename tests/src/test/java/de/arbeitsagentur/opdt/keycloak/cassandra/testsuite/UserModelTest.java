@@ -20,10 +20,12 @@ import static de.arbeitsagentur.opdt.keycloak.cassandra.user.CassandraUserAdapte
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.*;
 import static org.junit.Assert.*;
+import static org.keycloak.models.utils.KeycloakModelUtils.runJobInTransaction;
 
 import com.datastax.oss.driver.api.core.CqlSession;
 import com.datastax.oss.driver.api.core.cql.SimpleStatement;
 import de.arbeitsagentur.opdt.keycloak.cassandra.connection.CassandraConnectionProvider;
+import de.arbeitsagentur.opdt.keycloak.cassandra.testsuite.cassandra.CassandraKeycloakServerConfig;
 import de.arbeitsagentur.opdt.keycloak.cassandra.user.CassandraUserAdapter;
 import java.util.*;
 import java.util.concurrent.ConcurrentSkipListSet;
@@ -31,57 +33,51 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import org.hamcrest.Matchers;
+import org.jboss.logging.Logger;
 import org.junit.Assert;
-import org.junit.Test;
 import org.keycloak.common.util.Time;
 import org.keycloak.models.*;
+import org.keycloak.representations.idm.GroupRepresentation;
 import org.keycloak.services.managers.ClientManager;
 import org.keycloak.services.managers.RealmManager;
+import org.keycloak.testframework.annotations.InjectRealm;
+import org.keycloak.testframework.annotations.KeycloakIntegrationTest;
+import org.keycloak.testframework.injection.LifeCycle;
+import org.keycloak.testframework.realm.ManagedRealm;
+import org.keycloak.testframework.realm.RealmConfig;
+import org.keycloak.testframework.realm.RealmConfigBuilder;
+import org.keycloak.testframework.remote.annotations.TestOnServer;
 
 /**
  * Ported from:
  *
  * @author <a href="mailto:sthorger@redhat.com">Stian Thorgersen</a>
  */
-public class UserModelTest extends KeycloakModelTest {
+@KeycloakIntegrationTest(config = CassandraKeycloakServerConfig.class)
+public class UserModelTest extends CassandraModelTest {
+
+    private static final Logger log = Logger.getLogger(UserModelTest.class);
 
     protected static final int NUM_GROUPS = 100;
-    private String originalRealmId;
-    private String otherRealmId;
-    private String realm1RealmId;
-    private String realm2RealmId;
-    private final List<String> groupIds = new ArrayList<>(NUM_GROUPS);
+    private static final String ORIGINAL_REALM_NAME = "original";
+    private static final String OTHER_REALM_NAME = "other";
 
-    @Override
-    protected boolean isUseSameKeycloakSessionFactoryForAllThreads() {
-        return true;
+    @InjectRealm(ref = ORIGINAL_REALM_NAME, lifecycle = LifeCycle.METHOD, config = OriginalRealmConfig.class)
+    ManagedRealm originalRealm;
+
+    @InjectRealm(ref = OTHER_REALM_NAME, lifecycle = LifeCycle.METHOD)
+    ManagedRealm otherRealm;
+
+    private static List<String> groupIds() {
+        return IntStream.range(0, NUM_GROUPS)
+                .mapToObj(OriginalRealmConfig::groupId)
+                .collect(Collectors.toList());
     }
 
-    @Override
-    public void createEnvironment(KeycloakSession s) {
-        originalRealmId = s.realms().createRealm("original").getId();
-        otherRealmId = s.realms().createRealm("other").getId();
-        realm1RealmId = s.realms().createRealm("realm1").getId();
-        realm2RealmId = s.realms().createRealm("realm2").getId();
+    @TestOnServer
+    public void staleUserUpdate(KeycloakSession testSession) {
 
-        IntStream.range(0, NUM_GROUPS).forEach(i -> {
-            groupIds.add(s.groups()
-                    .createGroup(s.realms().getRealm(originalRealmId), "group-" + i)
-                    .getId());
-        });
-    }
-
-    @Override
-    public void cleanEnvironment(KeycloakSession s) {
-        s.realms().removeRealm(originalRealmId);
-        s.realms().removeRealm(otherRealmId);
-        s.realms().removeRealm(realm1RealmId);
-        s.realms().removeRealm(realm2RealmId);
-    }
-
-    @Test
-    public void staleUserUpdate() {
-        withRealm(originalRealmId, (session, realm) -> {
+        withRealm(testSession, ORIGINAL_REALM_NAME, (session, realm) -> {
             UserModel user = session.users().addUser(realm, "user");
             user.setFirstName("first-name");
             user.setLastName("last-name");
@@ -92,7 +88,7 @@ public class UserModelTest extends KeycloakModelTest {
 
         boolean staleExceptionOccured = false;
         try {
-            withRealm(originalRealmId, (session, realm) -> {
+            withRealm(testSession, ORIGINAL_REALM_NAME, (session, realm) -> {
                 UserModel user = session.users().getUserByUsername(realm, "user");
                 assertThat(user.getFirstAttribute(CassandraUserAdapter.ENTITY_VERSION), is("2"));
 
@@ -108,7 +104,7 @@ public class UserModelTest extends KeycloakModelTest {
 
         staleExceptionOccured = false;
         try {
-            withRealm(originalRealmId, (session, realm) -> {
+            withRealm(testSession, ORIGINAL_REALM_NAME, (session, realm) -> {
                 UserModel user = session.users().getUserByUsername(realm, "user");
                 assertThat(user.getFirstAttribute(CassandraUserAdapter.ENTITY_VERSION), is("2"));
 
@@ -123,9 +119,10 @@ public class UserModelTest extends KeycloakModelTest {
         assertTrue(staleExceptionOccured);
     }
 
-    @Test
-    public void testWorkingUserUpdate() {
-        withRealm(originalRealmId, (session, realm) -> {
+    @TestOnServer
+    public void testWorkingUserUpdate(KeycloakSession testSession) {
+
+        withRealm(testSession, ORIGINAL_REALM_NAME, (session, realm) -> {
             UserModel user = session.users().addUser(realm, "user");
             user.setFirstName("first-name");
             user.setLastName("last-name");
@@ -134,7 +131,7 @@ public class UserModelTest extends KeycloakModelTest {
             return null;
         });
 
-        withRealm(originalRealmId, (session, realm) -> {
+        withRealm(testSession, ORIGINAL_REALM_NAME, (session, realm) -> {
             UserModel user = session.users().getUserByUsername(realm, "user");
             assertThat(user.getFirstAttribute(CassandraUserAdapter.ENTITY_VERSION), is("2"));
 
@@ -144,7 +141,7 @@ public class UserModelTest extends KeycloakModelTest {
             return null;
         });
 
-        withRealm(originalRealmId, (session, realm) -> {
+        withRealm(testSession, ORIGINAL_REALM_NAME, (session, realm) -> {
             UserModel user = session.users().getUserByUsername(realm, "updateduser");
 
             assertThat(user.getFirstAttribute(CassandraUserAdapter.ENTITY_VERSION), is("3"));
@@ -156,16 +153,17 @@ public class UserModelTest extends KeycloakModelTest {
         });
     }
 
-    @Test
-    public void testOverrideCreationTimestamp() {
+    @TestOnServer
+    public void testOverrideCreationTimestamp(KeycloakSession testSession) {
+
         long newCreationTimestamp = Time.currentTimeMillis() - 42;
-        withRealm(originalRealmId, (session, realm) -> {
+        withRealm(testSession, ORIGINAL_REALM_NAME, (session, realm) -> {
             UserModel user = session.users().addUser(realm, "user");
             user.setCreatedTimestamp(newCreationTimestamp);
             return null;
         });
 
-        withRealm(originalRealmId, (session, realm) -> {
+        withRealm(testSession, ORIGINAL_REALM_NAME, (session, realm) -> {
             UserModel user = session.users().getUserByUsername(realm, "user");
             assertThat(user.getCreatedTimestamp(), is(newCreationTimestamp));
 
@@ -173,7 +171,7 @@ public class UserModelTest extends KeycloakModelTest {
             return null;
         });
 
-        withRealm(originalRealmId, (session, realm) -> {
+        withRealm(testSession, ORIGINAL_REALM_NAME, (session, realm) -> {
             UserModel user = session.users().getUserByUsername(realm, "user");
             assertThat(
                     user.getCreatedTimestamp(),
@@ -183,9 +181,10 @@ public class UserModelTest extends KeycloakModelTest {
         });
     }
 
-    @Test
-    public void testUsernameEqualsMailNoConfilctNoThrow() {
-        withRealm(originalRealmId, (session, realm) -> {
+    @TestOnServer
+    public void testUsernameEqualsMailNoConfilctNoThrow(KeycloakSession testSession) {
+
+        withRealm(testSession, ORIGINAL_REALM_NAME, (session, realm) -> {
             UserModel alice = session.users().addUser(realm, "alice");
             alice.setEmail("info@alice");
             UserModel bob = session.users().addUser(realm, "bob");
@@ -201,9 +200,10 @@ public class UserModelTest extends KeycloakModelTest {
         });
     }
 
-    @Test
-    public void testUsernameEqualsMailNoThrowIfUniquenessAcrossBothNotEnforced() {
-        withRealm(originalRealmId, (session, realm) -> {
+    @TestOnServer
+    public void testUsernameEqualsMailNoThrowIfUniquenessAcrossBothNotEnforced(KeycloakSession testSession) {
+
+        withRealm(testSession, ORIGINAL_REALM_NAME, (session, realm) -> {
             UserModel alice = session.users().addUser(realm, "alice");
             alice.setEmail("info@alice");
             UserModel bob = session.users().addUser(realm, "bob");
@@ -219,9 +219,10 @@ public class UserModelTest extends KeycloakModelTest {
         });
     }
 
-    @Test
-    public void testUsernameEqualsMailNoThrowIfDuplicateMailsAllowed() {
-        withRealm(originalRealmId, (session, realm) -> {
+    @TestOnServer
+    public void testUsernameEqualsMailNoThrowIfDuplicateMailsAllowed(KeycloakSession testSession) {
+
+        withRealm(testSession, ORIGINAL_REALM_NAME, (session, realm) -> {
             UserModel alice = session.users().addUser(realm, "alice");
             alice.setEmail("info@alice");
             UserModel bob = session.users().addUser(realm, "bob");
@@ -237,9 +238,10 @@ public class UserModelTest extends KeycloakModelTest {
         });
     }
 
-    @Test
-    public void testUsernameEqualsMailNoThrowForOwnMail() {
-        withRealm(originalRealmId, (session, realm) -> {
+    @TestOnServer
+    public void testUsernameEqualsMailNoThrowForOwnMail(KeycloakSession testSession) {
+
+        withRealm(testSession, ORIGINAL_REALM_NAME, (session, realm) -> {
             UserModel bob = session.users().addUser(realm, "bob");
             bob.setEmail("info@bob");
 
@@ -254,9 +256,10 @@ public class UserModelTest extends KeycloakModelTest {
     }
 
     @SuppressWarnings("java:S5778")
-    @Test
-    public void testUsernameEqualsMailThrowIfChecksEnabledAndUsedMail() {
-        withRealm(originalRealmId, (session, realm) -> {
+    @TestOnServer
+    public void testUsernameEqualsMailThrowIfChecksEnabledAndUsedMail(KeycloakSession testSession) {
+
+        withRealm(testSession, ORIGINAL_REALM_NAME, (session, realm) -> {
             UserModel alice = session.users().addUser(realm, "alice");
             alice.setEmail("info@alice");
             UserModel bob = session.users().addUser(realm, "bob");
@@ -271,9 +274,10 @@ public class UserModelTest extends KeycloakModelTest {
         });
     }
 
-    @Test
-    public void testMailEqualsUsernameNoConfilctNoThrow() {
-        withRealm(originalRealmId, (session, realm) -> {
+    @TestOnServer
+    public void testMailEqualsUsernameNoConfilctNoThrow(KeycloakSession testSession) {
+
+        withRealm(testSession, ORIGINAL_REALM_NAME, (session, realm) -> {
             UserModel alice = session.users().addUser(realm, "info@alice");
             alice.setEmail("info@alice");
             UserModel bob = session.users().addUser(realm, "info@bob");
@@ -289,9 +293,10 @@ public class UserModelTest extends KeycloakModelTest {
         });
     }
 
-    @Test
-    public void testMailEqualsUsernameNoThrowIfUniquenessAcrossBothNotEnforced() {
-        withRealm(originalRealmId, (session, realm) -> {
+    @TestOnServer
+    public void testMailEqualsUsernameNoThrowIfUniquenessAcrossBothNotEnforced(KeycloakSession testSession) {
+
+        withRealm(testSession, ORIGINAL_REALM_NAME, (session, realm) -> {
             UserModel alice = session.users().addUser(realm, "info@alice");
             alice.setEmail("othermail@alice"); // else the duplicate-mail check would interfere
             UserModel bob = session.users().addUser(realm, "bob");
@@ -307,9 +312,10 @@ public class UserModelTest extends KeycloakModelTest {
         });
     }
 
-    @Test
-    public void testMailEqualsUsernameNoThrowIfDuplicateMailsAllowed() {
-        withRealm(originalRealmId, (session, realm) -> {
+    @TestOnServer
+    public void testMailEqualsUsernameNoThrowIfDuplicateMailsAllowed(KeycloakSession testSession) {
+
+        withRealm(testSession, ORIGINAL_REALM_NAME, (session, realm) -> {
             UserModel alice = session.users().addUser(realm, "info@alice");
             alice.setEmail("info@alice");
             UserModel bob = session.users().addUser(realm, "info@bob");
@@ -325,9 +331,10 @@ public class UserModelTest extends KeycloakModelTest {
         });
     }
 
-    @Test
-    public void testMailEqualsUsernameNoThrowForOwnUsername() {
-        withRealm(originalRealmId, (session, realm) -> {
+    @TestOnServer
+    public void testMailEqualsUsernameNoThrowForOwnUsername(KeycloakSession testSession) {
+
+        withRealm(testSession, ORIGINAL_REALM_NAME, (session, realm) -> {
             UserModel bob = session.users().addUser(realm, "info@bob");
             bob.setEmail("othermail@bob");
 
@@ -342,9 +349,10 @@ public class UserModelTest extends KeycloakModelTest {
     }
 
     @SuppressWarnings("java:S5778")
-    @Test
-    public void testMailEqualsUsernameThrowIfChecksEnabledAndExistingUsername() {
-        withRealm(originalRealmId, (session, realm) -> {
+    @TestOnServer
+    public void testMailEqualsUsernameThrowIfChecksEnabledAndExistingUsername(KeycloakSession testSession) {
+
+        withRealm(testSession, ORIGINAL_REALM_NAME, (session, realm) -> {
             UserModel alice = session.users().addUser(realm, "info@alice");
             alice.setEmail("othermail@alice"); // else the duplicate-mail check would interfere
             UserModel bob = session.users().addUser(realm, "bob");
@@ -359,9 +367,10 @@ public class UserModelTest extends KeycloakModelTest {
         });
     }
 
-    @Test
-    public void testSetEntityVersion() {
-        withRealm(originalRealmId, (session, realm) -> {
+    @TestOnServer
+    public void testSetEntityVersion(KeycloakSession testSession) {
+
+        withRealm(testSession, ORIGINAL_REALM_NAME, (session, realm) -> {
             UserModel user = session.users().addUser(realm, "user");
             assertThat(user.getFirstAttribute(CassandraUserAdapter.ENTITY_VERSION), is("1"));
             assertThat(user.getFirstAttribute(CassandraUserAdapter.ENTITY_VERSION_READONLY), is("1"));
@@ -378,7 +387,7 @@ public class UserModelTest extends KeycloakModelTest {
             return null;
         });
 
-        withRealm(originalRealmId, (session, realm) -> {
+        withRealm(testSession, ORIGINAL_REALM_NAME, (session, realm) -> {
             UserModel user = session.users().getUserByUsername(realm, "user");
             assertThat(user.getFirstAttribute(CassandraUserAdapter.ENTITY_VERSION), is("2"));
             assertThat(user.getFirstAttribute(CassandraUserAdapter.ENTITY_VERSION_READONLY), is("2"));
@@ -387,9 +396,10 @@ public class UserModelTest extends KeycloakModelTest {
         });
     }
 
-    @Test
-    public void testPersistUser() {
-        withRealm(originalRealmId, (session, realm) -> {
+    @TestOnServer
+    public void testPersistUser(KeycloakSession testSession) {
+
+        withRealm(testSession, ORIGINAL_REALM_NAME, (session, realm) -> {
             UserModel user = session.users().addUser(realm, "user");
             user.setFirstName("first-name");
             user.setLastName("last-name");
@@ -421,9 +431,10 @@ public class UserModelTest extends KeycloakModelTest {
         });
     }
 
-    @Test
-    public void testWebOriginSet() {
-        withRealm(originalRealmId, (session, realm) -> {
+    @TestOnServer
+    public void testWebOriginSet(KeycloakSession testSession) {
+
+        withRealm(testSession, ORIGINAL_REALM_NAME, (session, realm) -> {
             ClientModel client = realm.addClient("user");
 
             Assert.assertThat(client.getWebOrigins(), empty());
@@ -460,9 +471,10 @@ public class UserModelTest extends KeycloakModelTest {
         });
     }
 
-    @Test
-    public void testUserRequiredActions() throws Exception {
-        withRealm(originalRealmId, (session, realm) -> {
+    @TestOnServer
+    public void testUserRequiredActions(KeycloakSession testSession) throws Exception {
+
+        withRealm(testSession, ORIGINAL_REALM_NAME, (session, realm) -> {
             UserModel user = session.users().addUser(realm, "user");
             List<String> requiredActions = user.getRequiredActionsStream().collect(Collectors.toList());
             Assert.assertThat(requiredActions, empty());
@@ -512,11 +524,12 @@ public class UserModelTest extends KeycloakModelTest {
         });
     }
 
-    @Test
-    public void testUserMultipleAttributes() throws Exception {
+    @TestOnServer
+    public void testUserMultipleAttributes(KeycloakSession testSession) throws Exception {
+
         AtomicReference<List<String>> attrValsAtomic = new AtomicReference<>();
 
-        withRealm(originalRealmId, (session, realm) -> {
+        withRealm(testSession, ORIGINAL_REALM_NAME, (session, realm) -> {
             UserModel user = session.users().addUser(realm, "user");
             session.users().addUser(realm, "user-noattrs");
 
@@ -530,7 +543,7 @@ public class UserModelTest extends KeycloakModelTest {
             return null;
         });
 
-        withRealm(originalRealmId, (session, realm) -> {
+        withRealm(testSession, ORIGINAL_REALM_NAME, (session, realm) -> {
             // Test read attributes
             UserModel user = session.users().getUserByUsername(realm, "user");
 
@@ -573,7 +586,7 @@ public class UserModelTest extends KeycloakModelTest {
             return null;
         });
 
-        withRealm(originalRealmId, (session, realm) -> {
+        withRealm(testSession, ORIGINAL_REALM_NAME, (session, realm) -> {
             UserModel user = session.users().getUserByUsername(realm, "user");
             Assert.assertThat(user.getFirstAttribute("key1"), nullValue());
 
@@ -586,10 +599,10 @@ public class UserModelTest extends KeycloakModelTest {
         });
     }
 
-    @Test
-    public void testUpdateUserAttribute() throws Exception {
+    @TestOnServer
+    public void testUpdateUserAttribute(KeycloakSession testSession) throws Exception {
 
-        withRealm(originalRealmId, (currentSession, realm) -> {
+        withRealm(testSession, ORIGINAL_REALM_NAME, (currentSession, realm) -> {
             UserModel user = currentSession.users().addUser(realm, "user");
 
             user.setSingleAttribute("key1", "value1");
@@ -600,7 +613,7 @@ public class UserModelTest extends KeycloakModelTest {
             return null;
         });
 
-        withRealm(originalRealmId, (currentSession, realm) -> {
+        withRealm(testSession, ORIGINAL_REALM_NAME, (currentSession, realm) -> {
             UserModel user = currentSession.users().getUserByUsername(realm, "userUpdated");
 
             assertThat(user.getFirstName(), is("fn"));
@@ -629,12 +642,12 @@ public class UserModelTest extends KeycloakModelTest {
     }
 
     // KEYCLOAK-3608
-    @Test
-    public void testUpdateUserSingleAttribute() {
+    @TestOnServer
+    public void testUpdateUserSingleAttribute(KeycloakSession testSession) {
 
         AtomicReference<Map<String, List<String>>> expectedAtomic = new AtomicReference<>();
 
-        withRealm(originalRealmId, (currentSession, realm) -> {
+        withRealm(testSession, ORIGINAL_REALM_NAME, (currentSession, realm) -> {
             Map<String, List<String>> expected = new HashMap<>();
             expected.put("key1", Collections.singletonList("value3"));
             expected.put("key2", Collections.singletonList("value2"));
@@ -659,7 +672,7 @@ public class UserModelTest extends KeycloakModelTest {
             return null;
         });
 
-        withRealm(originalRealmId, (currentSession, realm) -> {
+        withRealm(testSession, ORIGINAL_REALM_NAME, (currentSession, realm) -> {
             Map<String, List<String>> expected = expectedAtomic.get();
             expected.put(CassandraUserAdapter.ENTITY_VERSION_READONLY, Collections.singletonList("2"));
 
@@ -669,16 +682,16 @@ public class UserModelTest extends KeycloakModelTest {
         });
     }
 
-    @Test
-    public void testSearchByString() {
+    @TestOnServer
+    public void testSearchByString(KeycloakSession testSession) {
 
-        withRealm(originalRealmId, (currentSession, realm) -> {
+        withRealm(testSession, ORIGINAL_REALM_NAME, (currentSession, realm) -> {
             currentSession.users().addUser(realm, "user1");
             currentSession.users().addUser(realm, "user2");
             return null;
         });
 
-        withRealm(originalRealmId, (currentSession, realm) -> {
+        withRealm(testSession, ORIGINAL_REALM_NAME, (currentSession, realm) -> {
             UserModel user1 = currentSession.users().getUserByUsername(realm, "user1");
 
             List<UserModel> users = currentSession
@@ -690,7 +703,7 @@ public class UserModelTest extends KeycloakModelTest {
             return null;
         });
 
-        withRealm(originalRealmId, (currentSession, realm) -> {
+        withRealm(testSession, ORIGINAL_REALM_NAME, (currentSession, realm) -> {
             UserModel user1 = currentSession.users().getUserByUsername(realm, "user1");
             UserModel user2 = currentSession.users().getUserByUsername(realm, "user2");
 
@@ -703,7 +716,7 @@ public class UserModelTest extends KeycloakModelTest {
             return null;
         });
 
-        withRealm(originalRealmId, (currentSession, realm) -> {
+        withRealm(testSession, ORIGINAL_REALM_NAME, (currentSession, realm) -> {
             UserModel user1 = currentSession.users().getUserByUsername(realm, "user1");
             UserModel user2 = currentSession.users().getUserByUsername(realm, "user2");
 
@@ -715,10 +728,10 @@ public class UserModelTest extends KeycloakModelTest {
         });
     }
 
-    @Test
-    public void testSearchByParams() {
+    @TestOnServer
+    public void testSearchByParams(KeycloakSession testSession) {
 
-        withRealm(originalRealmId, (currentSession, realm) -> {
+        withRealm(testSession, ORIGINAL_REALM_NAME, (currentSession, realm) -> {
             UserModel user1 = currentSession.users().addUser(realm, "user1");
             user1.setSingleAttribute(UserModel.IDP_USER_ID, null);
 
@@ -730,7 +743,7 @@ public class UserModelTest extends KeycloakModelTest {
             return null;
         });
 
-        withRealm(originalRealmId, (currentSession, realm) -> {
+        withRealm(testSession, ORIGINAL_REALM_NAME, (currentSession, realm) -> {
             UserModel user2 = currentSession.users().getUserByUsername(realm, "user2");
 
             realm.setAttribute("keycloak.username-search.case-sensitive", "false");
@@ -747,7 +760,7 @@ public class UserModelTest extends KeycloakModelTest {
             return null;
         });
 
-        withRealm(originalRealmId, (currentSession, realm) -> {
+        withRealm(testSession, ORIGINAL_REALM_NAME, (currentSession, realm) -> {
             realm.setAttribute("keycloak.username-search.case-sensitive", "false");
 
             Map<String, String> params = new HashMap<>();
@@ -761,7 +774,7 @@ public class UserModelTest extends KeycloakModelTest {
             return null;
         });
 
-        withRealm(originalRealmId, (currentSession, realm) -> {
+        withRealm(testSession, ORIGINAL_REALM_NAME, (currentSession, realm) -> {
             UserModel user2 = currentSession.users().getUserByUsername(realm, "user2");
 
             realm.setAttribute("keycloak.username-search.case-sensitive", "true");
@@ -778,7 +791,7 @@ public class UserModelTest extends KeycloakModelTest {
             return null;
         });
 
-        withRealm(originalRealmId, (currentSession, realm) -> {
+        withRealm(testSession, ORIGINAL_REALM_NAME, (currentSession, realm) -> {
             realm.setAttribute("keycloak.username-search.case-sensitive", "true");
 
             Map<String, String> params = new HashMap<>();
@@ -792,7 +805,7 @@ public class UserModelTest extends KeycloakModelTest {
             return null;
         });
 
-        withRealm(originalRealmId, (currentSession, realm) -> {
+        withRealm(testSession, ORIGINAL_REALM_NAME, (currentSession, realm) -> {
             UserModel user2 = currentSession.users().getUserByUsername(realm, "user2");
 
             Map<String, String> params = new HashMap<>();
@@ -807,7 +820,7 @@ public class UserModelTest extends KeycloakModelTest {
             return null;
         });
 
-        withRealm(originalRealmId, (currentSession, realm) -> {
+        withRealm(testSession, ORIGINAL_REALM_NAME, (currentSession, realm) -> {
             UserModel user2 = currentSession.users().getUserByUsername(realm, "user2");
 
             Map<String, String> params = new HashMap<>();
@@ -821,7 +834,7 @@ public class UserModelTest extends KeycloakModelTest {
             return null;
         });
 
-        withRealm(originalRealmId, (currentSession, realm) -> {
+        withRealm(testSession, ORIGINAL_REALM_NAME, (currentSession, realm) -> {
             UserModel user2 = currentSession.users().getUserByUsername(realm, "user2");
 
             Map<String, String> params = new HashMap<>();
@@ -835,7 +848,7 @@ public class UserModelTest extends KeycloakModelTest {
             return null;
         });
 
-        withRealm(originalRealmId, (currentSession, realm) -> {
+        withRealm(testSession, ORIGINAL_REALM_NAME, (currentSession, realm) -> {
             Map<String, String> params = new HashMap<>();
             params.put(UserModel.USERNAME, "user1");
             params.put(UserModel.INCLUDE_SERVICE_ACCOUNT, "true");
@@ -849,10 +862,10 @@ public class UserModelTest extends KeycloakModelTest {
         });
     }
 
-    @Test
-    public void testSearchByUserAttribute() throws Exception {
+    @TestOnServer
+    public void testSearchByUserAttribute(KeycloakSession testSession) throws Exception {
 
-        withRealm(originalRealmId, (currentSession, realm) -> {
+        withRealm(testSession, ORIGINAL_REALM_NAME, (currentSession, realm) -> {
             UserModel user1 = currentSession.users().addUser(realm, "user1");
             UserModel user2 = currentSession.users().addUser(realm, "user2");
             UserModel user3 = currentSession.users().addUser(realm, "user3");
@@ -871,7 +884,7 @@ public class UserModelTest extends KeycloakModelTest {
             return null;
         });
 
-        withRealm(originalRealmId, (currentSession, realm) -> {
+        withRealm(testSession, ORIGINAL_REALM_NAME, (currentSession, realm) -> {
             UserModel user1 = currentSession.users().getUserByUsername(realm, "user1");
             UserModel user2 = currentSession.users().getUserByUsername(realm, "user2");
             UserModel user3 = currentSession.users().getUserByUsername(realm, "user3");
@@ -906,11 +919,11 @@ public class UserModelTest extends KeycloakModelTest {
         });
     }
 
-    @Test
-    public void testServiceAccountLinkRollback() {
+    @TestOnServer
+    public void testServiceAccountLinkRollback(KeycloakSession testSession) {
 
         try {
-            withRealm(originalRealmId, (currentSession, realm) -> {
+            withRealm(testSession, ORIGINAL_REALM_NAME, (currentSession, realm) -> {
                 UserModel user1 = currentSession.users().addUser(realm, "user1");
                 ClientModel client = realm.addClient("foo");
                 user1.setServiceAccountClientLink(client.getId());
@@ -918,7 +931,7 @@ public class UserModelTest extends KeycloakModelTest {
                 throw new RuntimeException("Rollback");
             });
         } catch (Exception e) {
-            withRealm(originalRealmId, (currentSession, realm) -> {
+            withRealm(testSession, ORIGINAL_REALM_NAME, (currentSession, realm) -> {
                 UserModel user1 = currentSession.users().getUserByUsername(realm, "user1");
                 assertNull(user1);
                 ClientModel client = realm.getClientByClientId("foo");
@@ -928,10 +941,10 @@ public class UserModelTest extends KeycloakModelTest {
         }
     }
 
-    @Test
-    public void testServiceAccountLink() throws Exception {
+    @TestOnServer
+    public void testServiceAccountLink(KeycloakSession testSession) throws Exception {
 
-        withRealm(originalRealmId, (currentSession, realm) -> {
+        withRealm(testSession, ORIGINAL_REALM_NAME, (currentSession, realm) -> {
             ClientModel client = realm.addClient("foo");
 
             UserModel user1 = currentSession.users().addUser(realm, "user1");
@@ -961,7 +974,7 @@ public class UserModelTest extends KeycloakModelTest {
             return null;
         });
 
-        withRealm(originalRealmId, (currentSession, realm) -> {
+        withRealm(testSession, ORIGINAL_REALM_NAME, (currentSession, realm) -> {
             UserModel user1 = currentSession.users().getUserByUsername(realm, "user1");
             UserModel user2 = currentSession.users().getUserByUsername(realm, "user2");
 
@@ -1003,79 +1016,23 @@ public class UserModelTest extends KeycloakModelTest {
             return null;
         });
 
-        withRealm(originalRealmId, (currentSession, realm) -> {
+        withRealm(testSession, ORIGINAL_REALM_NAME, (currentSession, realm) -> {
             // Assert service account removed as well
             Assert.assertThat(currentSession.users().getUserByUsername(realm, "user1"), nullValue());
             return null;
         });
     }
 
-    @Test
-    public void testGrantToAll() throws Exception {
+    @TestOnServer
+    public void testUserNotBefore(KeycloakSession testSession) throws Exception {
 
-        withRealm(realm1RealmId, (currentSession, realm1) -> {
-            realm1.addRole("role1");
-            realm1.addRole("defaultRole");
-            RoleModel defaultRole = realm1.getRole("defaultRole");
-            realm1.setDefaultRole(defaultRole);
-            currentSession.users().addUser(realm1, "user1");
-            currentSession.users().addUser(realm1, "user2");
-
-            RealmModel realm2 = currentSession.realms().getRealmByName("realm2");
-            currentSession.users().addUser(realm2, "user1");
-            return null;
-        });
-
-        withRealm(realm1RealmId, (currentSession, realm1) -> {
-            RoleModel role1 = realm1.getRole("role1");
-            currentSession.users().grantToAllUsers(realm1, role1);
-            return null;
-        });
-
-        withRealm(realm1RealmId, (currentSession, realm1) -> {
-            RoleModel role1 = realm1.getRole("role1");
-            RoleModel defaultRole = realm1.getRole("defaultRole");
-            UserModel user1 = currentSession.users().getUserByUsername(realm1, "user1");
-            UserModel user2 = currentSession.users().getUserByUsername(realm1, "user2");
-            assertTrue(user1.hasRole(role1));
-            assertTrue(user1.hasRole(defaultRole));
-            assertTrue(user2.hasRole(role1));
-            assertTrue(user2.hasRole(defaultRole));
-
-            RealmModel realm2 = currentSession.realms().getRealmByName("realm2");
-            UserModel realm2User1 = currentSession.users().getUserByUsername(realm2, "user1");
-            assertFalse(realm2User1.hasRole(role1));
-            assertFalse(realm2User1.hasRole(defaultRole));
-
-            user1.deleteRoleMapping(role1);
-            user1.deleteRoleMapping(defaultRole);
-            return null;
-        });
-
-        withRealm(realm1RealmId, (currentSession, realm1) -> {
-            RealmModel realm2 = currentSession.realms().getRealmByName("realm2");
-            RoleModel role1 = realm1.getRole("role1");
-            RoleModel defaultRole = realm1.getRole("defaultRole");
-            UserModel user1 = currentSession.users().getUserByUsername(realm1, "user1");
-            assertFalse(user1.hasRole(role1));
-            assertTrue(user1.hasRole(defaultRole)); // Still has default role even if mapping has been removed
-
-            currentSession.realms().removeRealm(realm1.getId());
-            currentSession.realms().removeRealm(realm2.getId());
-            return null;
-        });
-    }
-
-    @Test
-    public void testUserNotBefore() throws Exception {
-
-        withRealm(originalRealmId, (currentSession, realm) -> {
+        withRealm(testSession, ORIGINAL_REALM_NAME, (currentSession, realm) -> {
             UserModel user1 = currentSession.users().addUser(realm, "user1");
             currentSession.users().setNotBeforeForUser(realm, user1, 10);
             return null;
         });
 
-        withRealm(originalRealmId, (currentSession, realm) -> {
+        withRealm(testSession, ORIGINAL_REALM_NAME, (currentSession, realm) -> {
             UserModel user1 = currentSession.users().getUserByUsername(realm, "user1");
             int notBefore = currentSession.users().getNotBeforeOfUser(realm, user1);
             Assert.assertThat(notBefore, equalTo(10));
@@ -1085,7 +1042,7 @@ public class UserModelTest extends KeycloakModelTest {
             return null;
         });
 
-        withRealm(originalRealmId, (currentSession, realm) -> {
+        withRealm(testSession, ORIGINAL_REALM_NAME, (currentSession, realm) -> {
             UserModel user1 = currentSession.users().getUserByUsername(realm, "user1");
             int notBefore = currentSession.users().getNotBeforeOfUser(realm, user1);
             Assert.assertThat(notBefore, equalTo(20));
@@ -1103,12 +1060,14 @@ public class UserModelTest extends KeycloakModelTest {
                 containsInAnyOrder(expected.getRequiredActionsStream().toArray()));
     }
 
-    private Void addRemoveUser(int i) {
-        withRealm(originalRealmId, (session, realm) -> {
+    private static Void addRemoveUser(KeycloakSessionFactory factory, String realmName, int i) {
+        runJobInTransaction(factory, session -> {
+            RealmModel realm = session.realms().getRealmByName(realmName);
+            session.getContext().setRealm(realm);
             UserModel user = session.users().addUser(realm, "user-" + i);
 
             IntStream.range(0, NUM_GROUPS / 20).forEach(gIndex -> {
-                user.joinGroup(session.groups().getGroupById(realm, groupIds.get((i + gIndex) % NUM_GROUPS)));
+                user.joinGroup(session.groups().getGroupById(realm, groupIds().get((i + gIndex) % NUM_GROUPS)));
             });
 
             UserModel obtainedUser = session.users().getUserById(realm, user.getId());
@@ -1122,7 +1081,8 @@ public class UserModelTest extends KeycloakModelTest {
             assertThat(userGroupIds, hasItem("group-" + i));
             assertThat(userGroupIds, hasItem("group-" + (i - 1 + (NUM_GROUPS / 20)) % NUM_GROUPS));
 
-            obtainedUser.leaveGroup(session.groups().getGroupById(realm, groupIds.get(i)));
+            obtainedUser.leaveGroup(
+                    session.groups().getGroupById(realm, groupIds().get(i)));
             userGroupIds =
                     obtainedUser.getGroupsStream().map(GroupModel::getName).collect(Collectors.toSet());
             assertThat(userGroupIds, hasSize((NUM_GROUPS / 20) - 1));
@@ -1130,25 +1090,27 @@ public class UserModelTest extends KeycloakModelTest {
             assertTrue(session.users().removeUser(realm, user));
             assertFalse(session.users().removeUser(realm, user));
             assertNull(session.users().getUserByUsername(realm, user.getUsername()));
-
-            return null;
         });
         return null;
     }
 
-    @Test
-    public void testAddRemoveUser() {
-        addRemoveUser(1);
+    @TestOnServer
+    public void testAddRemoveUser(KeycloakSession testSession) {
+
+        addRemoveUser(testSession.getKeycloakSessionFactory(), ORIGINAL_REALM_NAME, 1);
     }
 
-    @Test
-    public void testAddRemoveUserConcurrent() {
-        IntStream.range(0, 100).parallel().forEach(i -> addRemoveUser(i));
+    @TestOnServer
+    public void testAddRemoveUserConcurrent(KeycloakSession testSession) {
+
+        KeycloakSessionFactory factory = testSession.getKeycloakSessionFactory();
+        IntStream.range(0, 100).parallel().forEach(i -> addRemoveUser(factory, ORIGINAL_REALM_NAME, i));
     }
 
-    @Test
-    public void testAddRemoveUserCaseInsensitive() {
-        withRealm(originalRealmId, (session, realm) -> {
+    @TestOnServer
+    public void testAddRemoveUserCaseInsensitive(KeycloakSession testSession) {
+
+        withRealm(testSession, ORIGINAL_REALM_NAME, (session, realm) -> {
             realm.setAttribute(REALM_ATTR_USERNAME_CASE_SENSITIVE, true);
 
             UserModel user1 = session.users().addUser(realm, "user-1");
@@ -1165,7 +1127,7 @@ public class UserModelTest extends KeycloakModelTest {
             return null;
         });
 
-        withRealm(originalRealmId, (session, realm) -> {
+        withRealm(testSession, ORIGINAL_REALM_NAME, (session, realm) -> {
             UserModel user1 = session.users().getUserByUsername(realm, "user-1");
             session.users().removeUser(realm, user1);
             List<UserModel> foundUsers = session.users()
@@ -1180,9 +1142,10 @@ public class UserModelTest extends KeycloakModelTest {
     }
 
     @SuppressWarnings("java:S5778")
-    @Test
-    public void testAddUserExistingMailAsUsernameWithoutConflict() {
-        withRealm(originalRealmId, (session, realm) -> {
+    @TestOnServer
+    public void testAddUserExistingMailAsUsernameWithoutConflict(KeycloakSession testSession) {
+
+        withRealm(testSession, ORIGINAL_REALM_NAME, (session, realm) -> {
             UserModel alice = session.users().addUser(realm, "alice");
             alice.setEmail("info@alice");
 
@@ -1197,9 +1160,10 @@ public class UserModelTest extends KeycloakModelTest {
     }
 
     @SuppressWarnings("java:S5778")
-    @Test
-    public void testAddUserExistingMailAsUsernameThrows() {
-        withRealm(originalRealmId, (session, realm) -> {
+    @TestOnServer
+    public void testAddUserExistingMailAsUsernameThrows(KeycloakSession testSession) {
+
+        withRealm(testSession, ORIGINAL_REALM_NAME, (session, realm) -> {
             UserModel alice = session.users().addUser(realm, "alice");
             alice.setEmail("info@alice");
 
@@ -1212,9 +1176,10 @@ public class UserModelTest extends KeycloakModelTest {
         });
     }
 
-    @Test
-    public void testAddUserExistingMailAsUsernameNoThrowIfCheckDisabled() {
-        withRealm(originalRealmId, (session, realm) -> {
+    @TestOnServer
+    public void testAddUserExistingMailAsUsernameNoThrowIfCheckDisabled(KeycloakSession testSession) {
+
+        withRealm(testSession, ORIGINAL_REALM_NAME, (session, realm) -> {
             UserModel alice = session.users().addUser(realm, "alice");
             alice.setEmail("info@alice");
 
@@ -1228,9 +1193,10 @@ public class UserModelTest extends KeycloakModelTest {
         });
     }
 
-    @Test
-    public void testAddUserExistingMailAsUsernameNoThrowIfDuplicatesAllowed() {
-        withRealm(originalRealmId, (session, realm) -> {
+    @TestOnServer
+    public void testAddUserExistingMailAsUsernameNoThrowIfDuplicatesAllowed(KeycloakSession testSession) {
+
+        withRealm(testSession, ORIGINAL_REALM_NAME, (session, realm) -> {
             UserModel alice = session.users().addUser(realm, "alice");
             alice.setEmail("info@alice");
 
@@ -1244,62 +1210,24 @@ public class UserModelTest extends KeycloakModelTest {
         });
     }
 
-    @Test
-    public void testCaseSensitivityGetUserByUsername() {
-        withRealm(realm1RealmId, (session, realm) -> {
-            realm.setAttribute(REALM_ATTR_USERNAME_CASE_SENSITIVE, true);
+    @TestOnServer
+    public void testAddRemoveUsersInTheSameGroupConcurrent(KeycloakSession testSession) {
 
-            UserModel user1 = session.users().addUser(realm, "user");
-            UserModel user2 = session.users().addUser(realm, "USER");
-
-            return null;
-        });
-
-        // try to query storage in a separate transaction to make sure that storage can handle
-        // case-sensitive usernames
-        withRealm(realm1RealmId, (session, realm) -> {
-            UserModel user1 = session.users().getUserByUsername(realm, "user");
-            UserModel user2 = session.users().getUserByUsername(realm, "USER");
-
-            assertThat(user1, not(nullValue()));
-            assertThat(user2, not(nullValue()));
-
-            assertThat(user1.getUsername(), equalTo("user"));
-            assertThat(user2.getUsername(), equalTo("USER"));
-
-            return null;
-        });
-
-        withRealm(realm2RealmId, (session, realm) -> {
-            realm.setAttribute(REALM_ATTR_USERNAME_CASE_SENSITIVE, false);
-
-            UserModel user1 = session.users().addUser(realm, "user");
-            assertThat(user1, not(nullValue()));
-
-            UserProvider userProvider = session.users();
-            Assert.assertThrows(ModelDuplicateException.class, () -> userProvider.addUser(realm, "USER"));
-
-            return null;
-        });
-    }
-
-    @Test
-    public void testAddRemoveUsersInTheSameGroupConcurrent() {
         final ConcurrentSkipListSet<String> userIds = new ConcurrentSkipListSet<>();
-        String groupId = groupIds.get(0);
+        String groupId = groupIds().get(0);
+        KeycloakSessionFactory factory = testSession.getKeycloakSessionFactory();
 
         // Create users and let them join first group
         IntStream.range(0, 100)
                 .parallel()
-                .forEach(index -> inComittedTransaction(index, (session, i) -> {
-                    final RealmModel realm = session.realms().getRealm(originalRealmId);
-                    final UserModel user = session.users().addUser(realm, "user-" + i);
+                .forEach(index -> runJobInTransaction(factory, session -> {
+                    final RealmModel realm = session.realms().getRealmByName(ORIGINAL_REALM_NAME);
+                    final UserModel user = session.users().addUser(realm, "user-" + index);
                     user.joinGroup(session.groups().getGroupById(realm, groupId));
                     userIds.add(user.getId());
-                    return null;
                 }));
 
-        withRealm(originalRealmId, (session, realm) -> {
+        withRealm(testSession, ORIGINAL_REALM_NAME, (session, realm) -> {
             final GroupModel group = session.groups().getGroupById(realm, groupId);
             assertThat(session.users().getGroupMembersStream(realm, group).count(), is(100L));
             assertThat(
@@ -1318,14 +1246,13 @@ public class UserModelTest extends KeycloakModelTest {
 
         userIds.stream()
                 .parallel()
-                .forEach(index -> inComittedTransaction(index, (session, userId) -> {
-                    final RealmModel realm = session.realms().getRealm(originalRealmId);
+                .forEach(userId -> runJobInTransaction(factory, session -> {
+                    final RealmModel realm = session.realms().getRealmByName(ORIGINAL_REALM_NAME);
                     final UserModel user = session.users().getUserById(realm, userId);
                     log.debugf("Remove user %s: %s", userId, session.users().removeUser(realm, user));
-                    return null;
                 }));
 
-        withRealm(originalRealmId, (session, realm) -> {
+        withRealm(testSession, ORIGINAL_REALM_NAME, (session, realm) -> {
             final GroupModel group = session.groups().getGroupById(realm, groupId);
             assertThat(
                     session.users().getGroupMembersStream(realm, group).collect(Collectors.toList()), Matchers.empty());
@@ -1333,16 +1260,17 @@ public class UserModelTest extends KeycloakModelTest {
         });
     }
 
-    @Test
-    public void testResolveNameConflict() {
-        withRealm(originalRealmId, (session, realm) -> {
+    @TestOnServer
+    public void testResolveNameConflict(KeycloakSession testSession) {
+
+        withRealm(testSession, ORIGINAL_REALM_NAME, (session, realm) -> {
             session.users().addUser(realm, "test1@example.com");
             session.users().addUser(realm, "test2@example.com");
 
             return null;
         });
 
-        withRealm(originalRealmId, (session, realm) -> {
+        withRealm(testSession, ORIGINAL_REALM_NAME, (session, realm) -> {
             UserModel user1 = session.users().getUserByUsername(realm, "test1@example.com");
             UserModel user2 = session.users().getUserByUsername(realm, "test2@example.com");
 
@@ -1353,7 +1281,7 @@ public class UserModelTest extends KeycloakModelTest {
             return null;
         });
 
-        withRealm(originalRealmId, (session, realm) -> {
+        withRealm(testSession, ORIGINAL_REALM_NAME, (session, realm) -> {
             UserModel user1 = session.users().getUserByUsername(realm, "test2@example.com");
             UserModel user2 = session.users().getUserByUsername(realm, "test2_migrated@example.com");
 
@@ -1367,18 +1295,19 @@ public class UserModelTest extends KeycloakModelTest {
         });
     }
 
-    @Test
-    public void testGetUserByUsernameIgnoresAndCleansStaleSearchIndexEntries() {
+    @TestOnServer
+    public void testGetUserByUsernameIgnoresAndCleansStaleSearchIndexEntries(KeycloakSession testSession) {
+
         final String oldUsername = "a@example.com";
         final String newUsername = "a@example.com#archived";
 
-        String userId = withRealm(originalRealmId, (session, realm) -> {
+        String userId = withRealm(testSession, ORIGINAL_REALM_NAME, (session, realm) -> {
             UserModel user = session.users().addUser(realm, oldUsername);
             user.setUsername(newUsername);
             return user.getId();
         });
 
-        withRealm(originalRealmId, (session, realm) -> {
+        withRealm(testSession, ORIGINAL_REALM_NAME, (session, realm) -> {
             CassandraConnectionProvider connectionProvider = session.getProvider(CassandraConnectionProvider.class);
             CqlSession cqlSession = connectionProvider.getCqlSession();
 
@@ -1398,16 +1327,20 @@ public class UserModelTest extends KeycloakModelTest {
             return null;
         });
 
-        assertEquals(2L, countUserSearchIndexEntries(originalRealmId, UserModel.USERNAME, oldUsername, newUsername));
         assertEquals(
                 2L,
                 countUserSearchIndexEntries(
-                        originalRealmId,
+                        testSession, ORIGINAL_REALM_NAME, UserModel.USERNAME, oldUsername, newUsername));
+        assertEquals(
+                2L,
+                countUserSearchIndexEntries(
+                        testSession,
+                        ORIGINAL_REALM_NAME,
                         "usernameCaseInsensitive",
                         oldUsername.toLowerCase(Locale.ROOT),
                         newUsername.toLowerCase(Locale.ROOT)));
 
-        withRealm(originalRealmId, (session, realm) -> {
+        withRealm(testSession, ORIGINAL_REALM_NAME, (session, realm) -> {
             UserModel user = session.users().getUserByUsername(realm, oldUsername);
             assertNull(user);
 
@@ -1420,219 +1353,233 @@ public class UserModelTest extends KeycloakModelTest {
         assertEquals(
                 1L,
                 countUserSearchIndexEntries(
-                        originalRealmId,
+                        testSession,
+                        ORIGINAL_REALM_NAME,
                         "usernameCaseInsensitive",
                         oldUsername.toLowerCase(Locale.ROOT),
                         newUsername.toLowerCase(Locale.ROOT)));
 
-        withRealm(originalRealmId, (session, realm) -> {
+        withRealm(testSession, ORIGINAL_REALM_NAME, (session, realm) -> {
             realm.setAttribute(REALM_ATTR_USERNAME_CASE_SENSITIVE, "true");
             UserModel user = session.users().getUserByUsername(realm, oldUsername);
             assertNull(user);
             return null;
         });
 
-        assertEquals(1L, countUserSearchIndexEntries(originalRealmId, UserModel.USERNAME, oldUsername, newUsername));
+        assertEquals(
+                1L,
+                countUserSearchIndexEntries(
+                        testSession, ORIGINAL_REALM_NAME, UserModel.USERNAME, oldUsername, newUsername));
     }
 
-    @Test
-    public void thatEmailChangeWorksAsExpected() {
-        withRealm(originalRealmId, (session, realm) -> {
+    @TestOnServer
+    public void thatEmailChangeWorksAsExpected(KeycloakSession testSession) {
+
+        withRealm(testSession, ORIGINAL_REALM_NAME, (session, realm) -> {
             UserModel user = session.users().addUser(realm, "user");
             user.setEmail("email");
 
             return null;
         });
 
-        withRealm(originalRealmId, (session, realm) -> {
+        withRealm(testSession, ORIGINAL_REALM_NAME, (session, realm) -> {
             UserModel user = session.users().getUserByUsername(realm, "user");
             user.setEmail("anotheremail");
             return null;
         });
 
-        withRealm(originalRealmId, (session, realm) -> {
+        withRealm(testSession, ORIGINAL_REALM_NAME, (session, realm) -> {
             UserModel user = session.users().getUserByUsername(realm, "user");
             assertThat(user.getEmail(), is("anotheremail"));
             return null;
         });
     }
 
-    @Test
-    public void thatUpdatingNullEmailWorksAsExpected() {
-        withRealm(originalRealmId, (session, realm) -> {
+    @TestOnServer
+    public void thatUpdatingNullEmailWorksAsExpected(KeycloakSession testSession) {
+
+        withRealm(testSession, ORIGINAL_REALM_NAME, (session, realm) -> {
             UserModel user = session.users().addUser(realm, "user");
             user.setEmail(null);
             return null;
         });
 
-        withRealm(originalRealmId, (session, realm) -> {
+        withRealm(testSession, ORIGINAL_REALM_NAME, (session, realm) -> {
             UserModel user = session.users().getUserByUsername(realm, "user");
             user.setEmail("email");
             return null;
         });
 
-        withRealm(originalRealmId, (session, realm) -> {
+        withRealm(testSession, ORIGINAL_REALM_NAME, (session, realm) -> {
             UserModel user = session.users().getUserByUsername(realm, "user");
             assertThat(user.getEmail(), is("email"));
             return null;
         });
     }
 
-    @Test
-    public void thatUnchangedEmailUpdateWorksAsExpected() {
-        withRealm(originalRealmId, (session, realm) -> {
+    @TestOnServer
+    public void thatUnchangedEmailUpdateWorksAsExpected(KeycloakSession testSession) {
+
+        withRealm(testSession, ORIGINAL_REALM_NAME, (session, realm) -> {
             UserModel user = session.users().addUser(realm, "user");
             user.setEmail("email");
 
             return null;
         });
 
-        withRealm(originalRealmId, (session, realm) -> {
+        withRealm(testSession, ORIGINAL_REALM_NAME, (session, realm) -> {
             UserModel user = session.users().getUserByUsername(realm, "user");
             user.setEmail("email");
             return null;
         });
 
-        withRealm(originalRealmId, (session, realm) -> {
+        withRealm(testSession, ORIGINAL_REALM_NAME, (session, realm) -> {
             UserModel user = session.users().getUserByUsername(realm, "user");
             assertThat(user.getEmail(), is("email"));
             return null;
         });
     }
 
-    @Test
-    public void thatServiceAccountClientLinkChangeWorksAsExpected() {
-        withRealm(originalRealmId, (session, realm) -> {
+    @TestOnServer
+    public void thatServiceAccountClientLinkChangeWorksAsExpected(KeycloakSession testSession) {
+
+        withRealm(testSession, ORIGINAL_REALM_NAME, (session, realm) -> {
             UserModel user = session.users().addUser(realm, "user");
             user.setServiceAccountClientLink("link");
 
             return null;
         });
 
-        withRealm(originalRealmId, (session, realm) -> {
+        withRealm(testSession, ORIGINAL_REALM_NAME, (session, realm) -> {
             UserModel user = session.users().getUserByUsername(realm, "user");
             user.setServiceAccountClientLink("anotherlink");
             return null;
         });
 
-        withRealm(originalRealmId, (session, realm) -> {
+        withRealm(testSession, ORIGINAL_REALM_NAME, (session, realm) -> {
             UserModel user = session.users().getUserByUsername(realm, "user");
             assertThat(user.getServiceAccountClientLink(), is("anotherlink"));
             return null;
         });
     }
 
-    @Test
-    public void thatUpdatingNullServiceAccountClientLinkWorksAsExpected() {
-        withRealm(originalRealmId, (session, realm) -> {
+    @TestOnServer
+    public void thatUpdatingNullServiceAccountClientLinkWorksAsExpected(KeycloakSession testSession) {
+
+        withRealm(testSession, ORIGINAL_REALM_NAME, (session, realm) -> {
             UserModel user = session.users().addUser(realm, "user");
             user.setServiceAccountClientLink(null);
             return null;
         });
 
-        withRealm(originalRealmId, (session, realm) -> {
+        withRealm(testSession, ORIGINAL_REALM_NAME, (session, realm) -> {
             UserModel user = session.users().getUserByUsername(realm, "user");
             user.setServiceAccountClientLink("link");
             return null;
         });
 
-        withRealm(originalRealmId, (session, realm) -> {
+        withRealm(testSession, ORIGINAL_REALM_NAME, (session, realm) -> {
             UserModel user = session.users().getUserByUsername(realm, "user");
             assertThat(user.getServiceAccountClientLink(), is("link"));
             return null;
         });
     }
 
-    @Test
-    public void thatUnchangedServiceAccountClientLinkUpdateWorksAsExpected() {
-        withRealm(originalRealmId, (session, realm) -> {
+    @TestOnServer
+    public void thatUnchangedServiceAccountClientLinkUpdateWorksAsExpected(KeycloakSession testSession) {
+
+        withRealm(testSession, ORIGINAL_REALM_NAME, (session, realm) -> {
             UserModel user = session.users().addUser(realm, "user");
             user.setServiceAccountClientLink("link");
 
             return null;
         });
 
-        withRealm(originalRealmId, (session, realm) -> {
+        withRealm(testSession, ORIGINAL_REALM_NAME, (session, realm) -> {
             UserModel user = session.users().getUserByUsername(realm, "user");
             user.setServiceAccountClientLink("link");
             return null;
         });
 
-        withRealm(originalRealmId, (session, realm) -> {
+        withRealm(testSession, ORIGINAL_REALM_NAME, (session, realm) -> {
             UserModel user = session.users().getUserByUsername(realm, "user");
             assertThat(user.getServiceAccountClientLink(), is("link"));
             return null;
         });
     }
 
-    @Test
-    public void thatFederationLinkChangeWorksAsExpected() {
-        withRealm(originalRealmId, (session, realm) -> {
+    @TestOnServer
+    public void thatFederationLinkChangeWorksAsExpected(KeycloakSession testSession) {
+
+        withRealm(testSession, ORIGINAL_REALM_NAME, (session, realm) -> {
             UserModel user = session.users().addUser(realm, "user");
             user.setFederationLink("federationLink");
 
             return null;
         });
 
-        withRealm(originalRealmId, (session, realm) -> {
+        withRealm(testSession, ORIGINAL_REALM_NAME, (session, realm) -> {
             UserModel user = session.users().getUserByUsername(realm, "user");
             user.setFederationLink("anotherlink");
             return null;
         });
 
-        withRealm(originalRealmId, (session, realm) -> {
+        withRealm(testSession, ORIGINAL_REALM_NAME, (session, realm) -> {
             UserModel user = session.users().getUserByUsername(realm, "user");
             assertThat(user.getFederationLink(), is("anotherlink"));
             return null;
         });
     }
 
-    @Test
-    public void thatUpdatingFederationLinkWorksAsExpected() {
-        withRealm(originalRealmId, (session, realm) -> {
+    @TestOnServer
+    public void thatUpdatingFederationLinkWorksAsExpected(KeycloakSession testSession) {
+
+        withRealm(testSession, ORIGINAL_REALM_NAME, (session, realm) -> {
             UserModel user = session.users().addUser(realm, "user");
             user.setFederationLink(null);
             return null;
         });
 
-        withRealm(originalRealmId, (session, realm) -> {
+        withRealm(testSession, ORIGINAL_REALM_NAME, (session, realm) -> {
             UserModel user = session.users().getUserByUsername(realm, "user");
             user.setFederationLink("link");
             return null;
         });
 
-        withRealm(originalRealmId, (session, realm) -> {
+        withRealm(testSession, ORIGINAL_REALM_NAME, (session, realm) -> {
             UserModel user = session.users().getUserByUsername(realm, "user");
             assertThat(user.getFederationLink(), is("link"));
             return null;
         });
     }
 
-    @Test
-    public void thatUnchangedFederationLinkUpdateWorksAsExpected() {
-        withRealm(originalRealmId, (session, realm) -> {
+    @TestOnServer
+    public void thatUnchangedFederationLinkUpdateWorksAsExpected(KeycloakSession testSession) {
+
+        withRealm(testSession, ORIGINAL_REALM_NAME, (session, realm) -> {
             UserModel user = session.users().addUser(realm, "user");
             user.setFederationLink("federationLink");
 
             return null;
         });
 
-        withRealm(originalRealmId, (session, realm) -> {
+        withRealm(testSession, ORIGINAL_REALM_NAME, (session, realm) -> {
             UserModel user = session.users().getUserByUsername(realm, "user");
             user.setFederationLink("federationLink");
             return null;
         });
 
-        withRealm(originalRealmId, (session, realm) -> {
+        withRealm(testSession, ORIGINAL_REALM_NAME, (session, realm) -> {
             UserModel user = session.users().getUserByUsername(realm, "user");
             assertThat(user.getFederationLink(), is("federationLink"));
             return null;
         });
     }
 
-    @Test
-    public void testDeleteUserWithMultipleFederatedIdentities() {
-        String userId = withRealm(originalRealmId, (session, realm) -> {
+    @TestOnServer
+    public void testDeleteUserWithMultipleFederatedIdentities(KeycloakSession testSession) {
+
+        String userId = withRealm(testSession, ORIGINAL_REALM_NAME, (session, realm) -> {
             UserModel user = session.users().addUser(realm, "testUser");
 
             // Add multiple federated identities
@@ -1650,7 +1597,7 @@ public class UserModelTest extends KeycloakModelTest {
             return user.getId();
         });
 
-        withRealm(originalRealmId, (session, realm) -> {
+        withRealm(testSession, ORIGINAL_REALM_NAME, (session, realm) -> {
             UserModel user = session.users().getUserById(realm, userId);
             assertThat(user, notNullValue());
 
@@ -1665,7 +1612,7 @@ public class UserModelTest extends KeycloakModelTest {
             return null;
         });
 
-        withRealm(originalRealmId, (session, realm) -> {
+        withRealm(testSession, ORIGINAL_REALM_NAME, (session, realm) -> {
             // Verify user is deleted
             UserModel deletedUser = session.users().getUserById(realm, userId);
             assertThat(deletedUser, nullValue());
@@ -1694,10 +1641,12 @@ public class UserModelTest extends KeycloakModelTest {
         });
     }
 
-    private long countUserSearchIndexEntries(String realmId, String name, String... values) {
-        return inComittedTransaction(session -> {
+    private static long countUserSearchIndexEntries(
+            KeycloakSession testSession, String realmName, String name, String... values) {
+        return inCommittedTransaction(testSession, session -> {
             CassandraConnectionProvider connectionProvider = session.getProvider(CassandraConnectionProvider.class);
             CqlSession cqlSession = connectionProvider.getCqlSession();
+            String realmId = session.realms().getRealmByName(realmName).getId();
             return Arrays.stream(values)
                     .mapToLong(value -> cqlSession
                             .execute(SimpleStatement.newInstance(
@@ -1709,5 +1658,27 @@ public class UserModelTest extends KeycloakModelTest {
                             .size())
                     .sum();
         });
+    }
+
+    public static class OriginalRealmConfig implements RealmConfig {
+        @Override
+        public RealmConfigBuilder configure(RealmConfigBuilder realm) {
+            GroupRepresentation[] groups = IntStream.range(0, NUM_GROUPS)
+                    .mapToObj(i -> group(groupId(i), "group-" + i))
+                    .toArray(GroupRepresentation[]::new);
+            realm.update(rep -> rep.setGroups(Arrays.asList(groups)));
+            return realm;
+        }
+
+        private static GroupRepresentation group(String id, String name) {
+            GroupRepresentation group = new GroupRepresentation();
+            group.setId(id);
+            group.setName(name);
+            return group;
+        }
+
+        private static String groupId(int index) {
+            return "group-" + index + "-id";
+        }
     }
 }
