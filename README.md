@@ -72,10 +72,6 @@ It can further be restricted by setting the role attribute `unattendedServiceAcc
 
 To assign a role to a service account, a client attribute `initialServiceAccountRoles` needs to contain a comma-separated list of all role ids to set (which need to have the aforementioned attributes set).
 
-## Contributing
-
-Before contributing to Keycloak Cassandra, please read our [contributing guidelines](CONTRIBUTING.md).
-
 ### Private image registries
 
 If you use a private image registry, you can use the .testcontainers file in your user directory to override all
@@ -88,6 +84,21 @@ Example:
 docker.client.strategy=org.testcontainers.dockerclient.EnvironmentAndSystemPropertyClientProviderStrategy
 hub.image.name.prefix=private-registry/3rd-party/
 ```
+
+## Local Development
+
+### Prerequisites
+
+- **JDK**: See `pom.xml` for the required Java version.
+- **Maven**: Used for building the project.
+- **Docker**: Required for running integration tests via Testcontainers. A `docker-compose.yaml` is provided for a local setup including Cassandra.
+
+### Checks (formatting and tests)
+
+Run the following commands locally to ensure code quality:
+
+- **Formatting**: `mvn spotless:apply` (Ensures consistent code style).
+- **Verification**: `mvn verify` (Runs the full test suite and builds the project).
 
 ### Debugging
 
