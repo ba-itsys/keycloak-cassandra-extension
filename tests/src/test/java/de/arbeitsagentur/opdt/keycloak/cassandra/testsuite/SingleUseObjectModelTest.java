@@ -18,56 +18,48 @@ package de.arbeitsagentur.opdt.keycloak.cassandra.testsuite;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 
+import de.arbeitsagentur.opdt.keycloak.cassandra.testsuite.cassandra.CassandraKeycloakServerConfig;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 import org.hamcrest.Matchers;
 import org.junit.Assert;
-import org.junit.Test;
 import org.keycloak.common.util.Time;
-import org.keycloak.models.Constants;
 import org.keycloak.models.DefaultActionTokenKey;
 import org.keycloak.models.KeycloakSession;
-import org.keycloak.models.RealmModel;
 import org.keycloak.models.SingleUseObjectProvider;
-import org.keycloak.models.UserModel;
+import org.keycloak.testframework.annotations.InjectRealm;
+import org.keycloak.testframework.annotations.KeycloakIntegrationTest;
+import org.keycloak.testframework.injection.LifeCycle;
+import org.keycloak.testframework.realm.ManagedRealm;
+import org.keycloak.testframework.realm.RealmConfig;
+import org.keycloak.testframework.realm.RealmConfigBuilder;
+import org.keycloak.testframework.remote.annotations.TestOnServer;
 
-public class SingleUseObjectModelTest extends KeycloakModelTest {
+@KeycloakIntegrationTest(config = CassandraKeycloakServerConfig.class)
+public class SingleUseObjectModelTest extends CassandraModelTest {
 
-    private String realmId;
+    private static final String USER_ID = "single-use-user";
+    private static final String REALM_NAME = "single-use";
 
-    private String userId;
+    @InjectRealm(ref = REALM_NAME, lifecycle = LifeCycle.METHOD, config = SingleUseRealmConfig.class)
+    ManagedRealm managedRealm;
 
-    @Override
-    public void createEnvironment(KeycloakSession s) {
-        RealmModel realm = s.realms().createRealm("realm");
-        realm.setDefaultRole(
-                s.roles().addRealmRole(realm, Constants.DEFAULT_ROLES_ROLE_PREFIX + "-" + realm.getName()));
-        realmId = realm.getId();
-        UserModel user = s.users().addUser(realm, "user");
-        userId = user.getId();
-    }
+    @TestOnServer
+    public void testActionTokens(KeycloakSession testSession) {
 
-    @Override
-    public void cleanEnvironment(KeycloakSession s) {
-        Time.setOffset(0);
-        s.realms().removeRealm(realmId);
-    }
-
-    @Test
-    public void testActionTokens() {
-        DefaultActionTokenKey key = withRealm(realmId, (session, realm) -> {
+        DefaultActionTokenKey key = withRealm(testSession, REALM_NAME, (session, realm) -> {
             SingleUseObjectProvider singleUseObjectProvider = session.singleUseObjects();
             int time = Time.currentTime();
             DefaultActionTokenKey actionTokenKey =
-                    new DefaultActionTokenKey(userId, UUID.randomUUID().toString(), time + 3, null);
+                    new DefaultActionTokenKey(USER_ID, UUID.randomUUID().toString(), time + 3, null);
             Map<String, String> notes = new HashMap<>();
             notes.put("foo", "bar");
             singleUseObjectProvider.put(actionTokenKey.serializeKey(), actionTokenKey.getExp() - time, notes);
             return actionTokenKey;
         });
 
-        inComittedTransaction(session -> {
+        inCommittedTransaction(testSession, session -> {
             SingleUseObjectProvider singleUseObjectProvider = session.singleUseObjects();
             Map<String, String> notes = singleUseObjectProvider.get(key.serializeKey());
             Assert.assertNotNull(notes);
@@ -78,7 +70,7 @@ public class SingleUseObjectModelTest extends KeycloakModelTest {
             Assert.assertEquals("bar", notes.get("foo"));
         });
 
-        inComittedTransaction(session -> {
+        inCommittedTransaction(testSession, session -> {
             SingleUseObjectProvider singleUseObjectProvider = session.singleUseObjects();
             Map<String, String> notes = singleUseObjectProvider.get(key.serializeKey());
             Assert.assertNull(notes);
@@ -88,7 +80,7 @@ public class SingleUseObjectModelTest extends KeycloakModelTest {
             singleUseObjectProvider.put(key.serializeKey(), key.getExp() - Time.currentTime(), notes);
         });
 
-        inComittedTransaction(session -> {
+        inCommittedTransaction(testSession, session -> {
             SingleUseObjectProvider singleUseObjectProvider = session.singleUseObjects();
             Map<String, String> notes = singleUseObjectProvider.get(key.serializeKey());
             Assert.assertNotNull(notes);
@@ -101,8 +93,9 @@ public class SingleUseObjectModelTest extends KeycloakModelTest {
         });
     }
 
-    @Test
-    public void testSingleUseStore() {
+    @TestOnServer
+    public void testSingleUseStore(KeycloakSession testSession) {
+
         String key = UUID.randomUUID().toString();
         Map<String, String> notes = new HashMap<>();
         notes.put("foo", "bar");
@@ -110,7 +103,7 @@ public class SingleUseObjectModelTest extends KeycloakModelTest {
         Map<String, String> notes2 = new HashMap<>();
         notes2.put("baf", "meow");
 
-        inComittedTransaction(session -> {
+        inCommittedTransaction(testSession, session -> {
             SingleUseObjectProvider singleUseStore = session.singleUseObjects();
             Assert.assertFalse(singleUseStore.replace(key, notes2));
 
@@ -118,7 +111,7 @@ public class SingleUseObjectModelTest extends KeycloakModelTest {
             singleUseStore.put(key, 3, notes2);
         });
 
-        inComittedTransaction(session -> {
+        inCommittedTransaction(testSession, session -> {
             SingleUseObjectProvider singleUseStore = session.singleUseObjects();
             Map<String, String> actualNotes = singleUseStore.get(key);
             Assert.assertEquals(notes2, actualNotes);
@@ -126,7 +119,7 @@ public class SingleUseObjectModelTest extends KeycloakModelTest {
             Assert.assertTrue(singleUseStore.replace(key, notes2));
         });
 
-        inComittedTransaction(session -> {
+        inCommittedTransaction(testSession, session -> {
             SingleUseObjectProvider singleUseStore = session.singleUseObjects();
             Map<String, String> actualNotes = singleUseStore.get(key);
             Assert.assertEquals(notes2, actualNotes);
@@ -136,12 +129,12 @@ public class SingleUseObjectModelTest extends KeycloakModelTest {
             Assert.assertEquals(notes2, singleUseStore.remove(key));
         });
 
-        inComittedTransaction(session -> {
+        inCommittedTransaction(testSession, session -> {
             SingleUseObjectProvider singleUseStore = session.singleUseObjects();
             Assert.assertTrue(singleUseStore.putIfAbsent(key, 3));
         });
 
-        inComittedTransaction(session -> {
+        inCommittedTransaction(testSession, session -> {
             SingleUseObjectProvider singleUseStore = session.singleUseObjects();
             Map<String, String> actualNotes = singleUseStore.get(key);
             assertThat(actualNotes, Matchers.anEmptyMap());
@@ -152,9 +145,10 @@ public class SingleUseObjectModelTest extends KeycloakModelTest {
         });
     }
 
-    @Test
-    public void testNullValueInNotes() {
-        inComittedTransaction(session -> {
+    @TestOnServer
+    public void testNullValueInNotes(KeycloakSession testSession) {
+
+        inCommittedTransaction(testSession, session -> {
             SingleUseObjectProvider singleUseStore = session.singleUseObjects();
             Map<String, String> nullNotes = new HashMap<>();
             nullNotes.put("key1", null);
@@ -164,11 +158,20 @@ public class SingleUseObjectModelTest extends KeycloakModelTest {
         });
     }
 
-    private void sleep(int waitTimeMs) {
+    private static void sleep(int waitTimeMs) {
         try {
             Thread.sleep(waitTimeMs);
         } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
             throw new RuntimeException(e);
+        }
+    }
+
+    public static class SingleUseRealmConfig implements RealmConfig {
+        @Override
+        public RealmConfigBuilder configure(RealmConfigBuilder realm) {
+            realm.addUser("user").id(USER_ID);
+            return realm;
         }
     }
 }

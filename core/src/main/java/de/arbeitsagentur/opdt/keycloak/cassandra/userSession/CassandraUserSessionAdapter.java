@@ -190,6 +190,11 @@ public class CassandraUserSessionAdapter implements UserSessionModel {
     }
 
     @Override
+    public SessionPersistenceState getPersistenceState() {
+        return userSessionEntity.getPersistenceState();
+    }
+
+    @Override
     public Map<String, AuthenticatedClientSessionModel> getAuthenticatedClientSessions() {
         List<AuthenticatedClientSessionValue> authenticatedClientSessions =
                 new ArrayList<>(userSessionEntity.getClientSessions().values());

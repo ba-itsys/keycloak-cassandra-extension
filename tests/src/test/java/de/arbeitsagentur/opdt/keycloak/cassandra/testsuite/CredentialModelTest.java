@@ -2,48 +2,40 @@ package de.arbeitsagentur.opdt.keycloak.cassandra.testsuite;
 
 import static org.junit.Assert.*;
 
+import de.arbeitsagentur.opdt.keycloak.cassandra.testsuite.cassandra.CassandraKeycloakServerConfig;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
-import org.junit.Test;
-import org.keycloak.common.crypto.CryptoIntegration;
 import org.keycloak.credential.CredentialModel;
 import org.keycloak.models.*;
+import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.credential.OTPCredentialModel;
-import org.keycloak.services.resources.KeycloakApplication;
+import org.keycloak.testframework.annotations.InjectRealm;
+import org.keycloak.testframework.annotations.KeycloakIntegrationTest;
+import org.keycloak.testframework.injection.LifeCycle;
+import org.keycloak.testframework.realm.ManagedRealm;
+import org.keycloak.testframework.realm.RealmConfig;
+import org.keycloak.testframework.realm.RealmConfigBuilder;
+import org.keycloak.testframework.remote.annotations.TestOnServer;
 
 /**
  * @author <a href="mailto:mposolda@redhat.com">Marek Posolda</a>
  */
-public class CredentialModelTest extends KeycloakModelTest {
+@KeycloakIntegrationTest(config = CassandraKeycloakServerConfig.class)
+public class CredentialModelTest extends CassandraModelTest {
+    private static final String REALM_NAME = "credential-model";
 
-    private String realmId;
+    @InjectRealm(ref = REALM_NAME, lifecycle = LifeCycle.METHOD, config = CredentialRealmConfig.class)
+    ManagedRealm managedRealm;
 
-    @Override
-    public void createEnvironment(KeycloakSession s) {
-        RealmModel realm = s.realms().createRealm("test");
-        realm.setDefaultRole(
-                s.roles().addRealmRole(realm, Constants.DEFAULT_ROLES_ROLE_PREFIX + "-" + realm.getName()));
-        CryptoIntegration.init(KeycloakApplication.class.getClassLoader());
+    @TestOnServer
+    public void testCredentialCRUD(KeycloakSession testSession) {
 
-        UserModel user = s.users().addUser(realm, "test-user@localhost");
-        user.credentialManager().updateCredential(UserCredentialModel.password("password"));
-
-        realmId = realm.getId();
-    }
-
-    @Override
-    public void cleanEnvironment(KeycloakSession s) {
-        s.realms().removeRealm(realmId);
-    }
-
-    @Test
-    public void testCredentialCRUD() {
         AtomicReference<String> passwordId = new AtomicReference<>();
         AtomicReference<String> otp1Id = new AtomicReference<>();
         AtomicReference<String> otp2Id = new AtomicReference<>();
 
-        withRealm(realmId, (currentSession, realm) -> {
+        withRealm(testSession, REALM_NAME, (currentSession, realm) -> {
             UserModel user = currentSession.users().getUserByUsername(realm, "test-user@localhost");
             List<CredentialModel> list =
                     user.credentialManager().getStoredCredentialsStream().collect(Collectors.toList());
@@ -61,7 +53,7 @@ public class CredentialModelTest extends KeycloakModelTest {
             return null;
         });
 
-        withRealm(realmId, (currentSession, realm) -> {
+        withRealm(testSession, REALM_NAME, (currentSession, realm) -> {
             UserModel user = currentSession.users().getUserByUsername(realm, "test-user@localhost");
 
             // Assert priorities: password, otp1, otp2
@@ -81,7 +73,7 @@ public class CredentialModelTest extends KeycloakModelTest {
             return null;
         });
 
-        withRealm(realmId, (currentSession, realm) -> {
+        withRealm(testSession, REALM_NAME, (currentSession, realm) -> {
             UserModel user = currentSession.users().getUserByUsername(realm, "test-user@localhost");
 
             // Assert priorities: password, otp2, otp1
@@ -95,7 +87,7 @@ public class CredentialModelTest extends KeycloakModelTest {
             return null;
         });
 
-        withRealm(realmId, (currentSession, realm) -> {
+        withRealm(testSession, REALM_NAME, (currentSession, realm) -> {
             UserModel user = currentSession.users().getUserByUsername(realm, "test-user@localhost");
 
             // Assert priorities: otp2, password, otp1
@@ -109,7 +101,7 @@ public class CredentialModelTest extends KeycloakModelTest {
             return null;
         });
 
-        withRealm(realmId, (currentSession, realm) -> {
+        withRealm(testSession, REALM_NAME, (currentSession, realm) -> {
             UserModel user = currentSession.users().getUserByUsername(realm, "test-user@localhost");
 
             // Assert priorities: otp2, otp1, password
@@ -123,7 +115,7 @@ public class CredentialModelTest extends KeycloakModelTest {
             return null;
         });
 
-        withRealm(realmId, (currentSession, realm) -> {
+        withRealm(testSession, REALM_NAME, (currentSession, realm) -> {
             UserModel user = currentSession.users().getUserByUsername(realm, "test-user@localhost");
 
             // Assert priorities: otp2, otp1, password
@@ -137,7 +129,7 @@ public class CredentialModelTest extends KeycloakModelTest {
             return null;
         });
 
-        withRealm(realmId, (currentSession, realm) -> {
+        withRealm(testSession, REALM_NAME, (currentSession, realm) -> {
             UserModel user = currentSession.users().getUserByUsername(realm, "test-user@localhost");
 
             // Assert priorities: otp2, password
@@ -156,6 +148,14 @@ public class CredentialModelTest extends KeycloakModelTest {
 
         for (int i = 0; i < expectedIds.length; i++) {
             assertEquals(creds.get(i).getId(), expectedIds[i]);
+        }
+    }
+
+    public static class CredentialRealmConfig implements RealmConfig {
+        @Override
+        public RealmConfigBuilder configure(RealmConfigBuilder realm) {
+            realm.addUser("test-user@localhost").password("password");
+            return realm;
         }
     }
 }

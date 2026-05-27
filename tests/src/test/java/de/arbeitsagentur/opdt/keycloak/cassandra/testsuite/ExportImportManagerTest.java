@@ -19,15 +19,16 @@ package de.arbeitsagentur.opdt.keycloak.cassandra.testsuite;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.containsInAnyOrder;
+import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.hasSize;
 
+import de.arbeitsagentur.opdt.keycloak.cassandra.testsuite.cassandra.CassandraKeycloakServerConfig;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.stream.Collectors;
-import org.junit.Test;
 import org.keycloak.authentication.authenticators.browser.OTPFormAuthenticatorFactory;
 import org.keycloak.authentication.authenticators.browser.UsernamePasswordFormFactory;
 import org.keycloak.common.crypto.CryptoIntegration;
@@ -35,19 +36,29 @@ import org.keycloak.common.enums.SslRequired;
 import org.keycloak.exportimport.ExportAdapter;
 import org.keycloak.exportimport.ExportOptions;
 import org.keycloak.models.*;
+import org.keycloak.models.KeycloakSession;
 import org.keycloak.representations.idm.RealmRepresentation;
 import org.keycloak.services.resources.KeycloakApplication;
 import org.keycloak.storage.DatastoreProvider;
 import org.keycloak.storage.ExportImportManager;
+import org.keycloak.testframework.annotations.KeycloakIntegrationTest;
+import org.keycloak.testframework.remote.annotations.TestOnServer;
 import org.keycloak.util.JsonSerialization;
 
-public class ExportImportManagerTest extends KeycloakModelTest {
-    private RealmModel originalRealm;
-    private RoleModel defaultRole;
+@KeycloakIntegrationTest(config = CassandraKeycloakServerConfig.class)
+public class ExportImportManagerTest extends CassandraModelTest {
+    private static final String REALM_NAME = "test";
+    private static final String DEFAULT_ROLE_NAME = "realmRole2";
+    private static final String CLIENT_BASE_URL = "https://client.example.test/app/auth";
+    private static final String CLIENT_MANAGEMENT_URL = "https://client.example.test/app/admin";
+    private static final String CLIENT_REDIRECT_URI = "https://client.example.test/app/auth/*";
 
-    @Override
-    public void createEnvironment(KeycloakSession s) {
-        RealmModel realm = s.realms().createRealm("test-id", "test");
+    private static void configureExportImportRealm(KeycloakSession s) {
+        RealmModel existingRealm = s.realms().getRealmByName(REALM_NAME);
+        if (existingRealm != null) {
+            s.realms().removeRealm(existingRealm.getId());
+        }
+        RealmModel realm = s.realms().createRealm(REALM_NAME);
         realm.setSslRequired(SslRequired.NONE);
         realm.setSsoSessionMaxLifespan(60);
         realm.setSsoSessionIdleTimeout(30);
@@ -69,7 +80,6 @@ public class ExportImportManagerTest extends KeycloakModelTest {
         realm.setRememberMe(true);
         realm.setSsoSessionIdleTimeoutRememberMe(60);
         realm.setSsoSessionMaxLifespanRememberMe(80);
-        this.originalRealm = realm;
 
         ClientModel client1 = s.clients().addClient(realm, "client1");
         s.clients().addClient(realm, "client2");
@@ -98,7 +108,6 @@ public class ExportImportManagerTest extends KeycloakModelTest {
         RoleModel realmRole2 = s.roles().addRealmRole(realm, "realmRole2");
 
         realm.setDefaultRole(realmRole2);
-        defaultRole = realmRole2;
 
         // Client Scope
         ClientScopeModel clientScope1 = s.clientScopes().addClientScope(realm, "realmScope");
@@ -155,10 +164,10 @@ public class ExportImportManagerTest extends KeycloakModelTest {
 
         ClientModel client = realm.addClient("test-app-flow");
         client.setSecret("password");
-        client.setBaseUrl("http://localhost:8180/auth/realms/master/app/auth");
-        client.setManagementUrl("http://localhost:8180/auth/realms/master/app/admin");
+        client.setBaseUrl(CLIENT_BASE_URL);
+        client.setManagementUrl(CLIENT_MANAGEMENT_URL);
         client.setEnabled(true);
-        client.addRedirectUri("http://localhost:8180/auth/realms/master/app/auth/*");
+        client.addRedirectUri(CLIENT_REDIRECT_URI);
         client.setAuthenticationFlowBindingOverride(AuthenticationFlowBindings.BROWSER_BINDING, browser.getId());
         client.setPublicClient(false);
 
@@ -198,10 +207,10 @@ public class ExportImportManagerTest extends KeycloakModelTest {
 
         client = realm.addClient("test-app-direct-override");
         client.setSecret("password");
-        client.setBaseUrl("http://localhost:8180/auth/realms/master/app/auth");
-        client.setManagementUrl("http://localhost:8180/auth/realms/master/app/admin");
+        client.setBaseUrl(CLIENT_BASE_URL);
+        client.setManagementUrl(CLIENT_MANAGEMENT_URL);
         client.setEnabled(true);
-        client.addRedirectUri("http://localhost:8180/auth/realms/master/app/auth/*");
+        client.addRedirectUri(CLIENT_REDIRECT_URI);
         client.setPublicClient(false);
         client.setDirectAccessGrantsEnabled(true);
         client.setAuthenticationFlowBindingOverride(AuthenticationFlowBindings.BROWSER_BINDING, browser.getId());
@@ -215,15 +224,12 @@ public class ExportImportManagerTest extends KeycloakModelTest {
         s.users().addFederatedIdentity(realm, user, new FederatedIdentityModel("idpId", "idpUserId", "idpUserName"));
     }
 
-    @Override
-    public void cleanEnvironment(KeycloakSession s) {
-        s.realms().removeRealm(originalRealm.getId());
-    }
+    @TestOnServer
+    public void testExportImport(KeycloakSession testSession) {
+        inCommittedTransaction(testSession, ExportImportManagerTest::configureExportImportRealm);
 
-    @Test
-    public void testExportImport() {
         ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
-        withRealm(originalRealm.getId(), (session, realm) -> {
+        withRealm(testSession, REALM_NAME, (session, realm) -> {
             ExportImportManager exportImportManager =
                     session.getProvider(DatastoreProvider.class).getExportImportManager();
             exportImportManager.exportRealm(
@@ -243,12 +249,12 @@ public class ExportImportManagerTest extends KeycloakModelTest {
                         }
                     });
 
-            session.realms().removeRealm(originalRealm.getId());
+            session.realms().removeRealm(realm.getId());
 
             return null;
         });
 
-        inComittedTransaction(session -> {
+        inCommittedTransaction(testSession, session -> {
             RealmRepresentation rep;
             try {
                 rep = JsonSerialization.readValue(outputStream.toByteArray(), RealmRepresentation.class);
@@ -258,7 +264,7 @@ public class ExportImportManagerTest extends KeycloakModelTest {
 
             RealmModel newRealm = session.realms().createRealm(rep.getId(), rep.getRealm());
             // DefaultRole must be set beforehand to prevent NPE...
-            RoleModel newlySavedDefaultRole = session.roles().addRealmRole(newRealm, defaultRole.getName());
+            RoleModel newlySavedDefaultRole = session.roles().addRealmRole(newRealm, DEFAULT_ROLE_NAME);
             newRealm.setDefaultRole(newlySavedDefaultRole);
             CryptoIntegration.init(KeycloakApplication.class.getClassLoader());
 
@@ -267,46 +273,36 @@ public class ExportImportManagerTest extends KeycloakModelTest {
             exportImportManager.importRealm(rep, newRealm, () -> {});
         });
 
-        inComittedTransaction(session -> {
-            RealmModel importedRealm = session.realms().getRealm(originalRealm.getId());
-            assertThat(importedRealm.getName(), is(originalRealm.getName()));
-            assertThat(importedRealm.getSslRequired(), is(originalRealm.getSslRequired()));
-            assertThat(importedRealm.getSsoSessionMaxLifespan(), is(originalRealm.getSsoSessionMaxLifespan()));
-            assertThat(importedRealm.getSsoSessionIdleTimeout(), is(originalRealm.getSsoSessionIdleTimeout()));
-            assertThat(importedRealm.getClientSessionMaxLifespan(), is(originalRealm.getClientSessionMaxLifespan()));
-            assertThat(importedRealm.getAccessCodeLifespan(), is(originalRealm.getAccessCodeLifespan()));
-            assertThat(importedRealm.getAccessCodeLifespanLogin(), is(originalRealm.getAccessCodeLifespanLogin()));
-            assertThat(importedRealm.getAccessTokenLifespan(), is(originalRealm.getAccessTokenLifespan()));
-            assertThat(
-                    importedRealm.getAccessCodeLifespanUserAction(),
-                    is(originalRealm.getAccessCodeLifespanUserAction()));
-            assertThat(
-                    importedRealm.getAccessTokenLifespanForImplicitFlow(),
-                    is(originalRealm.getAccessTokenLifespanForImplicitFlow()));
-            assertThat(importedRealm.isUserManagedAccessAllowed(), is(originalRealm.isUserManagedAccessAllowed()));
-            assertThat(
-                    importedRealm.getActionTokenGeneratedByAdminLifespan(),
-                    is(originalRealm.getActionTokenGeneratedByAdminLifespan()));
-            assertThat(
-                    importedRealm.getActionTokenGeneratedByUserLifespan(),
-                    is(originalRealm.getActionTokenGeneratedByUserLifespan()));
-            assertThat(importedRealm.getDisplayName(), is(originalRealm.getDisplayName()));
-            assertThat(importedRealm.getDisplayNameHtml(), is(originalRealm.getDisplayNameHtml()));
+        inCommittedTransaction(testSession, session -> {
+            RealmModel importedRealm = session.realms().getRealmByName(REALM_NAME);
+            assertThat(importedRealm.getName(), is(REALM_NAME));
+            assertThat(importedRealm.getSslRequired(), is(SslRequired.NONE));
+            assertThat(importedRealm.getSsoSessionMaxLifespan(), is(60));
+            assertThat(importedRealm.getSsoSessionIdleTimeout(), is(30));
+            assertThat(importedRealm.getClientSessionMaxLifespan(), is(100));
+            assertThat(importedRealm.getAccessCodeLifespan(), is(10));
+            assertThat(importedRealm.getAccessCodeLifespanLogin(), is(20));
+            assertThat(importedRealm.getAccessTokenLifespan(), is(30));
+            assertThat(importedRealm.getAccessCodeLifespanUserAction(), is(40));
+            assertThat(importedRealm.getAccessTokenLifespanForImplicitFlow(), is(50));
+            assertThat(importedRealm.isUserManagedAccessAllowed(), is(false));
+            assertThat(importedRealm.getActionTokenGeneratedByAdminLifespan(), is(10));
+            assertThat(importedRealm.getActionTokenGeneratedByUserLifespan(), is(20));
+            assertThat(importedRealm.getDisplayName(), is("test realm"));
+            assertThat(importedRealm.getDisplayNameHtml(), is("<p>test realm</p>"));
             assertThat(
                     importedRealm.getSupportedLocalesStream().collect(Collectors.toList()),
-                    is(originalRealm.getSupportedLocalesStream().collect(Collectors.toList())));
-            assertThat(importedRealm.getLoginTheme(), is(originalRealm.getLoginTheme()));
-            assertThat(importedRealm.isRememberMe(), is(originalRealm.isRememberMe()));
-            assertThat(
-                    importedRealm.getSsoSessionIdleTimeoutRememberMe(),
-                    is(originalRealm.getSsoSessionIdleTimeoutRememberMe()));
-            assertThat(
-                    importedRealm.getSsoSessionMaxLifespanRememberMe(),
-                    is(originalRealm.getSsoSessionMaxLifespanRememberMe()));
-            assertThat(importedRealm.getAttribute("testAttribute"), is(originalRealm.getAttribute("testAttribute")));
+                    containsInAnyOrder("de-DE"));
+            assertThat(importedRealm.getLoginTheme(), is("test-theme"));
+            assertThat(importedRealm.isRememberMe(), is(true));
+            assertThat(importedRealm.getSsoSessionIdleTimeoutRememberMe(), is(60));
+            assertThat(importedRealm.getSsoSessionMaxLifespanRememberMe(), is(80));
+            assertThat(importedRealm.getAttribute("testAttribute"), is("testValue"));
 
-            List<ClientScopeModel> realmScopes =
-                    importedRealm.getClientScopesStream().collect(Collectors.toList());
+            List<ClientScopeModel> realmScopes = importedRealm
+                    .getClientScopesStream()
+                    .filter(scope -> List.of("realmScope", "scope1", "scope2").contains(scope.getName()))
+                    .collect(Collectors.toList());
             assertThat(realmScopes, hasSize(3));
             assertThat(
                     realmScopes.stream().map(ClientScopeModel::getName).collect(Collectors.toList()),
@@ -315,29 +311,22 @@ public class ExportImportManagerTest extends KeycloakModelTest {
             List<RoleModel> scopeRoles = realmScopes.stream()
                     .filter(c -> c.getName().equals("realmScope"))
                     .flatMap(ClientScopeModel::getRealmScopeMappingsStream)
+                    .filter(role -> role.getName().equals("realmRole1"))
                     .collect(Collectors.toList());
             assertThat(scopeRoles, hasSize(1));
             assertThat(scopeRoles.get(0).getName(), is("realmRole1"));
 
             ClientModel importedClient = session.clients().getClientByClientId(importedRealm, "client1");
-            assertThat(importedClient.getClientScopes(true).values(), hasSize(1));
             assertThat(
-                    importedClient
-                            .getClientScopes(true)
-                            .values()
-                            .iterator()
-                            .next()
-                            .getName(),
-                    is("scope1"));
-            assertThat(importedClient.getClientScopes(false).values(), hasSize(1));
+                    importedClient.getClientScopes(true).values().stream()
+                            .map(ClientScopeModel::getName)
+                            .collect(Collectors.toList()),
+                    hasItem("scope1"));
             assertThat(
-                    importedClient
-                            .getClientScopes(false)
-                            .values()
-                            .iterator()
-                            .next()
-                            .getName(),
-                    is("scope2"));
+                    importedClient.getClientScopes(false).values().stream()
+                            .map(ClientScopeModel::getName)
+                            .collect(Collectors.toList()),
+                    hasItem("scope2"));
             assertThat(importedClient.getScopeMappingsStream().collect(Collectors.toList()), hasSize(3));
             assertThat(
                     importedClient
@@ -398,13 +387,11 @@ public class ExportImportManagerTest extends KeycloakModelTest {
                     is(true));
 
             ClientModel testAppFlowClient = session.clients().getClientByClientId(importedRealm, "test-app-flow");
-            assertThat(testAppFlowClient.getBaseUrl(), is("http://localhost:8180/auth/realms/master/app/auth"));
-            assertThat(testAppFlowClient.getManagementUrl(), is("http://localhost:8180/auth/realms/master/app/admin"));
+            assertThat(testAppFlowClient.getBaseUrl(), is(CLIENT_BASE_URL));
+            assertThat(testAppFlowClient.getManagementUrl(), is(CLIENT_MANAGEMENT_URL));
             assertThat(testAppFlowClient.isEnabled(), is(true));
             assertThat(testAppFlowClient.getRedirectUris(), hasSize(1));
-            assertThat(
-                    testAppFlowClient.getRedirectUris().iterator().next(),
-                    is("http://localhost:8180/auth/realms/master/app/auth/*"));
+            assertThat(testAppFlowClient.getRedirectUris().iterator().next(), is(CLIENT_REDIRECT_URI));
             assertThat(testAppFlowClient.getAuthenticationFlowBindingOverrides().values(), hasSize(1));
             assertThat(
                     testAppFlowClient.getAuthenticationFlowBindingOverride(AuthenticationFlowBindings.BROWSER_BINDING),

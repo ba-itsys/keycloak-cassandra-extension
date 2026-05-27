@@ -20,50 +20,48 @@ import static org.hamcrest.CoreMatchers.allOf;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.*;
 import static org.junit.Assert.*;
+import static org.keycloak.models.utils.KeycloakModelUtils.buildGroupPath;
 
 import de.arbeitsagentur.opdt.keycloak.cassandra.realm.CassandraRealmAdapter;
+import de.arbeitsagentur.opdt.keycloak.cassandra.testsuite.cassandra.CassandraKeycloakServerConfig;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.stream.Collectors;
-import org.junit.Ignore;
-import org.junit.Test;
-import org.keycloak.authorization.AuthorizationProvider;
-import org.keycloak.authorization.model.ResourceServer;
 import org.keycloak.common.util.MultivaluedHashMap;
 import org.keycloak.common.util.Time;
 import org.keycloak.component.ComponentModel;
 import org.keycloak.keys.KeyProvider;
 import org.keycloak.models.*;
-import org.keycloak.models.utils.KeycloakModelUtils;
 import org.keycloak.provider.ProviderEventListener;
+import org.keycloak.testframework.annotations.InjectRealm;
+import org.keycloak.testframework.annotations.KeycloakIntegrationTest;
+import org.keycloak.testframework.injection.LifeCycle;
+import org.keycloak.testframework.realm.ManagedRealm;
+import org.keycloak.testframework.remote.annotations.TestOnServer;
 
-public class RealmModelTest extends KeycloakModelTest {
+@KeycloakIntegrationTest(config = CassandraKeycloakServerConfig.class)
+public class RealmModelTest extends CassandraModelTest {
+    private static final String REALM_NAME = "realm-model";
 
-    private String realmId;
-    private String realm1Id;
-    private String realm2Id;
+    @InjectRealm(ref = REALM_NAME, lifecycle = LifeCycle.METHOD)
+    ManagedRealm managedRealm;
 
-    @Override
-    public void createEnvironment(KeycloakSession s) {
-        RealmModel realm = s.realms().createRealm("master");
-        realm.setDefaultRole(
-                s.roles().addRealmRole(realm, Constants.DEFAULT_ROLES_ROLE_PREFIX + "-" + realm.getName()));
-        this.realmId = realm.getId();
+    private static RealmModel createRealm(KeycloakSession session, String name) {
+        RealmModel realm = session.realms().getRealmByName(name);
+        if (realm != null) {
+            session.realms().removeRealm(realm.getId());
+        }
+        return session.realms().createRealm(name);
     }
 
-    @Override
-    public void cleanEnvironment(KeycloakSession s) {
-        s.realms().removeRealm(realmId);
-        if (realm1Id != null) s.realms().removeRealm(realm1Id);
-        if (realm2Id != null) s.realms().removeRealm(realm2Id);
-    }
+    @TestOnServer
+    public void staleRealmUpdate(KeycloakSession testSession) {
 
-    @Test
-    public void staleRealmUpdate() {
-        withRealm(realmId, (session, realm) -> {
+        withRealm(testSession, REALM_NAME, (session, realm) -> {
             realm.setAttribute("key", "val");
 
             return null;
@@ -71,7 +69,7 @@ public class RealmModelTest extends KeycloakModelTest {
 
         boolean staleExceptionOccured = false;
         try {
-            withRealm(realmId, (session, realm) -> {
+            withRealm(testSession, REALM_NAME, (session, realm) -> {
                 assertThat(realm.getAttribute(CassandraRealmAdapter.ENTITY_VERSION), is("3"));
 
                 realm.setAttribute(CassandraRealmAdapter.ENTITY_VERSION, "2");
@@ -86,7 +84,7 @@ public class RealmModelTest extends KeycloakModelTest {
 
         staleExceptionOccured = false;
         try {
-            withRealm(realmId, (session, realm) -> {
+            withRealm(testSession, REALM_NAME, (session, realm) -> {
                 assertThat(realm.getAttribute(CassandraRealmAdapter.ENTITY_VERSION), is("3"));
 
                 realm.setAttribute(CassandraRealmAdapter.ENTITY_VERSION, "4");
@@ -100,15 +98,16 @@ public class RealmModelTest extends KeycloakModelTest {
         assertTrue(staleExceptionOccured);
     }
 
-    @Test
-    public void workingRealmUpdate() {
-        withRealm(realmId, (session, realm) -> {
+    @TestOnServer
+    public void workingRealmUpdate(KeycloakSession testSession) {
+
+        withRealm(testSession, REALM_NAME, (session, realm) -> {
             realm.setAttribute("key", "val");
 
             return null;
         });
 
-        withRealm(realmId, (session, realm) -> {
+        withRealm(testSession, REALM_NAME, (session, realm) -> {
             assertThat(realm.getAttribute(CassandraRealmAdapter.ENTITY_VERSION), is("3"));
 
             realm.setAttribute("key", "val2");
@@ -116,7 +115,7 @@ public class RealmModelTest extends KeycloakModelTest {
             return null;
         });
 
-        withRealm(realmId, (session, realm) -> {
+        withRealm(testSession, REALM_NAME, (session, realm) -> {
             assertThat(realm.getAttribute(CassandraRealmAdapter.ENTITY_VERSION), is("4"));
             assertThat(realm.getAttribute("key"), is("val2"));
 
@@ -124,9 +123,10 @@ public class RealmModelTest extends KeycloakModelTest {
         });
     }
 
-    @Test
-    public void getRealmByName() {
-        inComittedTransaction(s -> {
+    @TestOnServer
+    public void getRealmByName(KeycloakSession testSession) {
+
+        inCommittedTransaction(testSession, s -> {
             s.realms().createRealm("my-realm");
             RealmModel realmByName = s.realms().getRealmByName("my-realm");
 
@@ -135,7 +135,7 @@ public class RealmModelTest extends KeycloakModelTest {
             realmByName.setName("my-updated-realm");
         });
 
-        inComittedTransaction(s -> {
+        inCommittedTransaction(testSession, s -> {
             RealmModel realmByName = s.realms().getRealmByName("my-updated-realm");
 
             assertThat(realmByName.getName(), is("my-updated-realm"));
@@ -145,9 +145,10 @@ public class RealmModelTest extends KeycloakModelTest {
         });
     }
 
-    @Test
-    public void entityVersionAttribute() {
-        withRealm(realmId, (session, realm) -> {
+    @TestOnServer
+    public void entityVersionAttribute(KeycloakSession testSession) {
+
+        withRealm(testSession, REALM_NAME, (session, realm) -> {
             assertThat(realm.getAttribute(CassandraRealmAdapter.ENTITY_VERSION), is("2"));
             assertThat(realm.getAttribute(CassandraRealmAdapter.ENTITY_VERSION_READONLY), is("2"));
 
@@ -164,9 +165,10 @@ public class RealmModelTest extends KeycloakModelTest {
         });
     }
 
-    @Test
-    public void testRealmLocalizationTexts() {
-        withRealm(realmId, (session, realm) -> {
+    @TestOnServer
+    public void testRealmLocalizationTexts(KeycloakSession testSession) {
+
+        withRealm(testSession, REALM_NAME, (session, realm) -> {
             // Assert emptyMap
             assertThat(realm.getRealmLocalizationTexts(), anEmptyMap());
             // Add a localization test
@@ -174,7 +176,7 @@ public class RealmModelTest extends KeycloakModelTest {
             return null;
         });
 
-        withRealm(realmId, (session, realm) -> {
+        withRealm(testSession, REALM_NAME, (session, realm) -> {
             // Assert the map contains the added value
             assertThat(realm.getRealmLocalizationTexts(), aMapWithSize(1));
             assertThat(
@@ -188,7 +190,7 @@ public class RealmModelTest extends KeycloakModelTest {
             return null;
         });
 
-        withRealm(realmId, (session, realm) -> {
+        withRealm(testSession, REALM_NAME, (session, realm) -> {
             assertThat(realm.getRealmLocalizationTexts(), aMapWithSize(1));
             assertThat(
                     realm.getRealmLocalizationTexts(),
@@ -205,7 +207,7 @@ public class RealmModelTest extends KeycloakModelTest {
             return null;
         });
 
-        withRealm(realmId, (session, realm) -> {
+        withRealm(testSession, REALM_NAME, (session, realm) -> {
             // Check everything created successfully
             assertThat(realm.getRealmLocalizationTexts(), aMapWithSize(2));
             assertThat(
@@ -224,7 +226,7 @@ public class RealmModelTest extends KeycloakModelTest {
             return null;
         });
 
-        withRealm(realmId, (session, realm) -> {
+        withRealm(testSession, REALM_NAME, (session, realm) -> {
             session.realms().updateLocalizationText(realm, "en", "key-b", "updated");
             assertThat(session.realms().getLocalizationTextsById(realm, "en", "key-b"), is("updated"));
 
@@ -232,7 +234,7 @@ public class RealmModelTest extends KeycloakModelTest {
             return null;
         });
 
-        withRealm(realmId, (session, realm) -> {
+        withRealm(testSession, REALM_NAME, (session, realm) -> {
             assertThat(realm.getRealmLocalizationTexts(), aMapWithSize(2));
             assertThat(
                     realm.getRealmLocalizationTexts(),
@@ -252,7 +254,7 @@ public class RealmModelTest extends KeycloakModelTest {
             return null;
         });
 
-        withRealm(realmId, (session, realm) -> {
+        withRealm(testSession, REALM_NAME, (session, realm) -> {
             assertThat(realm.getRealmLocalizationTexts(), aMapWithSize(1));
             assertThat(
                     realm.getRealmLocalizationTexts(),
@@ -267,50 +269,40 @@ public class RealmModelTest extends KeycloakModelTest {
         });
     }
 
-    @Test
-    @Ignore("Authorization is not supported currently")
-    public void testRealmPreRemoveDoesntRemoveEntitiesFromOtherRealms() {
-        realm1Id = inComittedTransaction(session -> {
-            RealmModel realm = session.realms().createRealm("realm1");
+    @TestOnServer
+    public void testRealmPreRemoveDoesntRemoveEntitiesFromOtherRealms(KeycloakSession testSession) {
+
+        String realm1Id = inCommittedTransaction(testSession, session -> {
+            RealmModel realm = createRealm(session, "realm1");
             realm.setDefaultRole(
                     session.roles().addRealmRole(realm, Constants.DEFAULT_ROLES_ROLE_PREFIX + "-" + realm.getName()));
             return realm.getId();
         });
-        realm2Id = inComittedTransaction(session -> {
-            RealmModel realm = session.realms().createRealm("realm2");
+        String realm2Id = inCommittedTransaction(testSession, session -> {
+            RealmModel realm = createRealm(session, "realm2");
             realm.setDefaultRole(
                     session.roles().addRealmRole(realm, Constants.DEFAULT_ROLES_ROLE_PREFIX + "-" + realm.getName()));
             return realm.getId();
         });
 
-        // Create client with resource server
-        String clientRealm1 = withRealm(realm1Id, (keycloakSession, realmModel) -> {
+        String clientRealm1 = withRealm(testSession, realm1Id, (keycloakSession, realmModel) -> {
             ClientModel clientRealm = realmModel.addClient("clientRealm1");
-            AuthorizationProvider provider = keycloakSession.getProvider(AuthorizationProvider.class);
-            provider.getStoreFactory().getResourceServerStore().create(clientRealm);
-
             return clientRealm.getId();
         });
 
-        // Remove realm 2
-        inComittedTransaction((Consumer<KeycloakSession>)
+        inCommittedTransaction(testSession, (Consumer<KeycloakSession>)
                 keycloakSession -> keycloakSession.realms().removeRealm(realm2Id));
 
-        // ResourceServer in realm1 must still exist
-        ResourceServer resourceServer = withRealm(realm1Id, (keycloakSession, realmModel) -> {
-            ClientModel client1 = realmModel.getClientById(clientRealm1);
-            return keycloakSession
-                    .getProvider(AuthorizationProvider.class)
-                    .getStoreFactory()
-                    .getResourceServerStore()
-                    .findByClient(client1);
+        ClientModel client = withRealm(testSession, realm1Id, (keycloakSession, realmModel) -> {
+            return realmModel.getClientById(clientRealm1);
         });
 
-        assertThat(resourceServer, notNullValue());
+        assertThat(client, notNullValue());
     }
 
-    @Test
-    public void testMoveGroup() {
+    @TestOnServer
+    public void testMoveGroup(KeycloakSession testSession) {
+
         ProviderEventListener providerEventListener = null;
         try {
             List<GroupModel.GroupPathChangeEvent> groupPathChangeEvents = new ArrayList<>();
@@ -319,19 +311,19 @@ public class RealmModelTest extends KeycloakModelTest {
                     groupPathChangeEvents.add((GroupModel.GroupPathChangeEvent) event);
                 }
             };
-            getFactory().register(providerEventListener);
+            testSession.getKeycloakSessionFactory().register(providerEventListener);
 
-            withRealm(realmId, (session, realm) -> {
+            withRealm(testSession, REALM_NAME, (session, realm) -> {
                 GroupModel groupA = realm.createGroup("a");
                 GroupModel groupB = realm.createGroup("b");
 
                 final String previousPath = "/a";
-                assertThat(KeycloakModelUtils.buildGroupPath(groupA), equalTo(previousPath));
+                assertThat(buildGroupPath(groupA), equalTo(previousPath));
 
                 realm.moveGroup(groupA, groupB);
 
                 final String expectedNewPath = "/b/a";
-                assertThat(KeycloakModelUtils.buildGroupPath(groupA), equalTo(expectedNewPath));
+                assertThat(buildGroupPath(groupA), equalTo(expectedNewPath));
 
                 assertThat(groupPathChangeEvents, hasSize(1));
                 GroupModel.GroupPathChangeEvent groupPathChangeEvent = groupPathChangeEvents.get(0);
@@ -342,14 +334,15 @@ public class RealmModelTest extends KeycloakModelTest {
             });
         } finally {
             if (providerEventListener != null) {
-                getFactory().unregister(providerEventListener);
+                testSession.getKeycloakSessionFactory().unregister(providerEventListener);
             }
         }
     }
 
-    @Test
-    public void testAuthenticationFlows() {
-        String flowId = withRealm(realmId, (s, realm) -> {
+    @TestOnServer
+    public void testAuthenticationFlows(KeycloakSession testSession) {
+
+        String flowId = withRealm(testSession, REALM_NAME, (s, realm) -> {
             AuthenticationFlowModel browser = new AuthenticationFlowModel();
             browser.setAlias("myFlow");
             browser.setDescription("browser based authentication");
@@ -360,7 +353,7 @@ public class RealmModelTest extends KeycloakModelTest {
             return realm.addAuthenticationFlow(browser).getId();
         });
 
-        withRealm(realmId, (s, realm) -> {
+        withRealm(testSession, REALM_NAME, (s, realm) -> {
             AuthenticationFlowModel readFlow = realm.getAuthenticationFlowById(flowId);
             assertThat(readFlow.getAlias(), is("myFlow"));
             assertThat(readFlow.getDescription(), is("browser based authentication"));
@@ -375,7 +368,7 @@ public class RealmModelTest extends KeycloakModelTest {
             return null;
         });
 
-        withRealm(realmId, (s, realm) -> {
+        withRealm(testSession, REALM_NAME, (s, realm) -> {
             AuthenticationFlowModel readFlow = realm.getAuthenticationFlowById(flowId);
             assertThat(readFlow.getAlias(), is("myFlow"));
             assertThat(readFlow.getDescription(), is("test"));
@@ -388,7 +381,7 @@ public class RealmModelTest extends KeycloakModelTest {
             return null;
         });
 
-        withRealm(realmId, (s, realm) -> {
+        withRealm(testSession, REALM_NAME, (s, realm) -> {
             AuthenticationFlowModel readFlow = realm.getAuthenticationFlowById(flowId);
             assertNull(readFlow);
 
@@ -396,9 +389,10 @@ public class RealmModelTest extends KeycloakModelTest {
         });
     }
 
-    @Test
-    public void testAuthenticatorExecutions() {
-        String executionId = withRealm(realmId, (s, realm) -> {
+    @TestOnServer
+    public void testAuthenticatorExecutions(KeycloakSession testSession) {
+
+        String executionId = withRealm(testSession, REALM_NAME, (s, realm) -> {
             AuthenticationExecutionModel execution = new AuthenticationExecutionModel();
             execution.setParentFlow("test");
             execution.setRequirement(AuthenticationExecutionModel.Requirement.REQUIRED);
@@ -409,7 +403,7 @@ public class RealmModelTest extends KeycloakModelTest {
             return realm.addAuthenticatorExecution(execution).getId();
         });
 
-        withRealm(realmId, (s, realm) -> {
+        withRealm(testSession, REALM_NAME, (s, realm) -> {
             AuthenticationExecutionModel execution = realm.getAuthenticationExecutionById(executionId);
             assertThat(execution.getParentFlow(), is("test"));
             assertThat(execution.getRequirement(), is(AuthenticationExecutionModel.Requirement.REQUIRED));
@@ -424,7 +418,7 @@ public class RealmModelTest extends KeycloakModelTest {
             return null;
         });
 
-        withRealm(realmId, (s, realm) -> {
+        withRealm(testSession, REALM_NAME, (s, realm) -> {
             AuthenticationExecutionModel execution = realm.getAuthenticationExecutionById(executionId);
             assertThat(execution.getParentFlow(), is("test"));
             assertThat(execution.getRequirement(), is(AuthenticationExecutionModel.Requirement.ALTERNATIVE));
@@ -437,7 +431,7 @@ public class RealmModelTest extends KeycloakModelTest {
             return null;
         });
 
-        withRealm(realmId, (s, realm) -> {
+        withRealm(testSession, REALM_NAME, (s, realm) -> {
             AuthenticationExecutionModel execution = realm.getAuthenticationExecutionById(executionId);
             assertNull(execution);
 
@@ -445,9 +439,10 @@ public class RealmModelTest extends KeycloakModelTest {
         });
     }
 
-    @Test
-    public void testAuthenticatorConfigs() {
-        String configId = withRealm(realmId, (s, realm) -> {
+    @TestOnServer
+    public void testAuthenticatorConfigs(KeycloakSession testSession) {
+
+        String configId = withRealm(testSession, REALM_NAME, (s, realm) -> {
             AuthenticatorConfigModel config = new AuthenticatorConfigModel();
             config.setAlias("test");
             config.setConfig(Map.of("key1", "val1", "key2", "val2"));
@@ -455,7 +450,7 @@ public class RealmModelTest extends KeycloakModelTest {
             return realm.addAuthenticatorConfig(config).getId();
         });
 
-        withRealm(realmId, (s, realm) -> {
+        withRealm(testSession, REALM_NAME, (s, realm) -> {
             AuthenticatorConfigModel config = realm.getAuthenticatorConfigById(configId);
             assertThat(config.getAlias(), is("test"));
             assertThat(config.getConfig().entrySet(), hasSize(2));
@@ -469,7 +464,7 @@ public class RealmModelTest extends KeycloakModelTest {
             return null;
         });
 
-        withRealm(realmId, (s, realm) -> {
+        withRealm(testSession, REALM_NAME, (s, realm) -> {
             AuthenticatorConfigModel config = realm.getAuthenticatorConfigByAlias("test");
             assertThat(config.getAlias(), is("test"));
             assertThat(config.getConfig().entrySet(), hasSize(2));
@@ -481,7 +476,7 @@ public class RealmModelTest extends KeycloakModelTest {
             return null;
         });
 
-        withRealm(realmId, (s, realm) -> {
+        withRealm(testSession, REALM_NAME, (s, realm) -> {
             AuthenticatorConfigModel config = realm.getAuthenticatorConfigByAlias("test");
             assertNull(config);
 
@@ -489,9 +484,10 @@ public class RealmModelTest extends KeycloakModelTest {
         });
     }
 
-    @Test
-    public void testRequiredActionProviders() {
-        String providerId = withRealm(realmId, (s, realm) -> {
+    @TestOnServer
+    public void testRequiredActionProviders(KeycloakSession testSession) {
+
+        String providerId = withRealm(testSession, REALM_NAME, (s, realm) -> {
             RequiredActionProviderModel requiredActionProviderModel = new RequiredActionProviderModel();
             requiredActionProviderModel.setAlias("test");
             requiredActionProviderModel.setProviderId("consent-provider");
@@ -502,7 +498,7 @@ public class RealmModelTest extends KeycloakModelTest {
             return realm.addRequiredActionProvider(requiredActionProviderModel).getId();
         });
 
-        withRealm(realmId, (s, realm) -> {
+        withRealm(testSession, REALM_NAME, (s, realm) -> {
             RequiredActionProviderModel provider = realm.getRequiredActionProviderById(providerId);
             assertThat(provider.getAlias(), is("test"));
             assertThat(provider.getProviderId(), is("consent-provider"));
@@ -517,7 +513,7 @@ public class RealmModelTest extends KeycloakModelTest {
             return null;
         });
 
-        withRealm(realmId, (s, realm) -> {
+        withRealm(testSession, REALM_NAME, (s, realm) -> {
             RequiredActionProviderModel provider = realm.getRequiredActionProviderByAlias("test");
             assertThat(provider.getAlias(), is("test"));
             assertThat(provider.getProviderId(), is("test-provider"));
@@ -530,7 +526,7 @@ public class RealmModelTest extends KeycloakModelTest {
             return null;
         });
 
-        withRealm(realmId, (s, realm) -> {
+        withRealm(testSession, REALM_NAME, (s, realm) -> {
             RequiredActionProviderModel provider = realm.getRequiredActionProviderByAlias("test");
             assertNull(provider);
 
@@ -538,9 +534,10 @@ public class RealmModelTest extends KeycloakModelTest {
         });
     }
 
-    @Test
-    public void testIdentityProviders() {
-        withRealm(realmId, (s, realm) -> {
+    @TestOnServer
+    public void testIdentityProviders(KeycloakSession testSession) {
+
+        withRealm(testSession, REALM_NAME, (s, realm) -> {
             IdentityProviderModel provider = new IdentityProviderModel();
             provider.setAlias("test");
             provider.setProviderId("idp-provider");
@@ -551,7 +548,7 @@ public class RealmModelTest extends KeycloakModelTest {
             return null;
         });
 
-        withRealm(realmId, (s, realm) -> {
+        withRealm(testSession, REALM_NAME, (s, realm) -> {
             IdentityProviderModel provider = realm.getIdentityProviderByAlias("test");
             assertThat(provider.getAlias(), is("test"));
             assertThat(provider.getProviderId(), is("idp-provider"));
@@ -567,7 +564,7 @@ public class RealmModelTest extends KeycloakModelTest {
             return null;
         });
 
-        withRealm(realmId, (s, realm) -> {
+        withRealm(testSession, REALM_NAME, (s, realm) -> {
             IdentityProviderModel provider = realm.getIdentityProviderByAlias("test");
             assertThat(provider.getAlias(), is("test"));
             assertThat(provider.getProviderId(), is("test-provider"));
@@ -579,7 +576,7 @@ public class RealmModelTest extends KeycloakModelTest {
             return null;
         });
 
-        withRealm(realmId, (s, realm) -> {
+        withRealm(testSession, REALM_NAME, (s, realm) -> {
             IdentityProviderModel provider = realm.getIdentityProviderByAlias("test");
             assertNull(provider);
             assertFalse(realm.isIdentityFederationEnabled());
@@ -588,9 +585,10 @@ public class RealmModelTest extends KeycloakModelTest {
         });
     }
 
-    @Test
-    public void testIdentityProviderMappers() {
-        String mapperId = withRealm(realmId, (s, realm) -> {
+    @TestOnServer
+    public void testIdentityProviderMappers(KeycloakSession testSession) {
+
+        String mapperId = withRealm(testSession, REALM_NAME, (s, realm) -> {
             IdentityProviderMapperModel mapper = new IdentityProviderMapperModel();
             mapper.setName("test");
             mapper.setIdentityProviderMapper("username");
@@ -600,7 +598,7 @@ public class RealmModelTest extends KeycloakModelTest {
             return realm.addIdentityProviderMapper(mapper).getId();
         });
 
-        withRealm(realmId, (s, realm) -> {
+        withRealm(testSession, REALM_NAME, (s, realm) -> {
             IdentityProviderMapperModel mapper = realm.getIdentityProviderMapperById(mapperId);
             assertThat(mapper.getName(), is("test"));
             assertThat(mapper.getIdentityProviderMapper(), is("username"));
@@ -615,7 +613,7 @@ public class RealmModelTest extends KeycloakModelTest {
             return null;
         });
 
-        withRealm(realmId, (s, realm) -> {
+        withRealm(testSession, REALM_NAME, (s, realm) -> {
             IdentityProviderMapperModel mapper = realm.getIdentityProviderMapperByName("testIdp", "test");
             assertThat(mapper.getName(), is("test"));
             assertThat(mapper.getIdentityProviderMapper(), is("username"));
@@ -629,7 +627,7 @@ public class RealmModelTest extends KeycloakModelTest {
             return null;
         });
 
-        withRealm(realmId, (s, realm) -> {
+        withRealm(testSession, REALM_NAME, (s, realm) -> {
             assertThat(
                     realm.getIdentityProviderMappersByAliasStream("testIdp").collect(Collectors.toList()), hasSize(0));
             assertThat(realm.getIdentityProviderMappersStream().collect(Collectors.toList()), hasSize(0));
@@ -638,12 +636,13 @@ public class RealmModelTest extends KeycloakModelTest {
         });
     }
 
-    @Test
-    public void testClientInitialAccesses() {
-        String modelId = withRealm(realmId, (s, realm) -> realm.createClientInitialAccessModel(60, 2)
+    @TestOnServer
+    public void testClientInitialAccesses(KeycloakSession testSession) {
+
+        String modelId = withRealm(testSession, REALM_NAME, (s, realm) -> realm.createClientInitialAccessModel(60, 2)
                 .getId());
 
-        withRealm(realmId, (s, realm) -> {
+        withRealm(testSession, REALM_NAME, (s, realm) -> {
             ClientInitialAccessModel clientInitialAccessModel = realm.getClientInitialAccessModel(modelId);
             assertThat(clientInitialAccessModel.getCount(), is(2));
             assertThat(clientInitialAccessModel.getRemainingCount(), is(2));
@@ -653,7 +652,7 @@ public class RealmModelTest extends KeycloakModelTest {
             return null;
         });
 
-        withRealm(realmId, (s, realm) -> {
+        withRealm(testSession, REALM_NAME, (s, realm) -> {
             List<ClientInitialAccessModel> clientInitialAccessModels =
                     realm.getClientInitialAccesses().collect(Collectors.toList());
             assertThat(clientInitialAccessModels, hasSize(1));
@@ -665,18 +664,22 @@ public class RealmModelTest extends KeycloakModelTest {
             return null;
         });
 
-        withRealm(realmId, (s, realm) -> {
+        withRealm(testSession, REALM_NAME, (s, realm) -> {
             assertThat(realm.getClientInitialAccesses().collect(Collectors.toList()), hasSize(0));
 
             realm.createClientInitialAccessModel(200, 2);
 
-            Time.setOffset(201);
-            s.realms().removeExpiredClientInitialAccess();
+            try {
+                Time.setOffset(201);
+                s.realms().removeExpiredClientInitialAccess();
+            } finally {
+                Time.setOffset(0);
+            }
 
             return null;
         });
 
-        withRealm(realmId, (s, realm) -> {
+        withRealm(testSession, REALM_NAME, (s, realm) -> {
             assertThat(realm.getClientInitialAccesses().collect(Collectors.toList()), hasSize(0));
 
             realm.createClientInitialAccessModel(3, 2);
@@ -690,16 +693,17 @@ public class RealmModelTest extends KeycloakModelTest {
             return null;
         });
 
-        withRealm(realmId, (s, realm) -> {
+        withRealm(testSession, REALM_NAME, (s, realm) -> {
             assertThat(realm.getClientInitialAccesses().collect(Collectors.toList()), hasSize(0));
 
             return null;
         });
     }
 
-    @Test
-    public void testComponents() {
-        String componentId = withRealm(realmId, (s, realm) -> {
+    @TestOnServer
+    public void testComponents(KeycloakSession testSession) {
+
+        String componentId = withRealm(testSession, REALM_NAME, (s, realm) -> {
             ComponentModel component = new ComponentModel();
             component.setName("test");
             component.setParentId("testParent");
@@ -710,7 +714,7 @@ public class RealmModelTest extends KeycloakModelTest {
             return realm.addComponentModel(component).getId();
         });
 
-        withRealm(realmId, (s, realm) -> {
+        withRealm(testSession, REALM_NAME, (s, realm) -> {
             ComponentModel model = realm.getComponent(componentId);
             assertThat(model.getName(), is("test"));
             assertThat(model.getParentId(), is("testParent"));
@@ -721,8 +725,7 @@ public class RealmModelTest extends KeycloakModelTest {
             List<RealmModel> realms = s.realms()
                     .getRealmsWithProviderTypeStream(KeyProvider.class)
                     .collect(Collectors.toList());
-            assertThat(realms, hasSize(1));
-            assertThat(realms.get(0), is(realm));
+            assertThat(realms.stream().map(RealmModel::getId).collect(Collectors.toSet()), hasItem(realm.getId()));
 
             model.getConfig().put("key1", List.of("value1", "value3"));
 
@@ -731,7 +734,7 @@ public class RealmModelTest extends KeycloakModelTest {
             return null;
         });
 
-        withRealm(realmId, (s, realm) -> {
+        withRealm(testSession, REALM_NAME, (s, realm) -> {
             ComponentModel model =
                     realm.getComponentsStream("testParent").findFirst().orElse(null);
             assertThat(model.getName(), is("test"));
@@ -745,8 +748,7 @@ public class RealmModelTest extends KeycloakModelTest {
             return null;
         });
 
-        withRealm(realmId, (s, realm) -> {
-            assertThat(realm.getComponentsStream().collect(Collectors.toList()), hasSize(0));
+        withRealm(testSession, REALM_NAME, (s, realm) -> {
             assertThat(realm.getComponentsStream("testParent").collect(Collectors.toList()), hasSize(0));
             assertThat(
                     realm.getComponentsStream("testParent", KeyProvider.class.getName())
@@ -765,14 +767,13 @@ public class RealmModelTest extends KeycloakModelTest {
             return null;
         });
 
-        withRealm(realmId, (s, realm) -> {
+        withRealm(testSession, REALM_NAME, (s, realm) -> {
             realm.removeComponents("testParent");
 
             return null;
         });
 
-        withRealm(realmId, (s, realm) -> {
-            assertThat(realm.getComponentsStream().collect(Collectors.toList()), hasSize(0));
+        withRealm(testSession, REALM_NAME, (s, realm) -> {
             assertThat(realm.getComponentsStream("testParent").collect(Collectors.toList()), hasSize(0));
             assertThat(
                     realm.getComponentsStream("testParent", KeyProvider.class.getName())
@@ -783,9 +784,10 @@ public class RealmModelTest extends KeycloakModelTest {
         });
     }
 
-    @Test
-    public void testActionTokens() {
-        withRealm(realmId, (s, realm) -> {
+    @TestOnServer
+    public void testActionTokens(KeycloakSession testSession) {
+
+        withRealm(testSession, REALM_NAME, (s, realm) -> {
             realm.setActionTokenGeneratedByUserLifespan(42);
             realm.setActionTokenGeneratedByAdminLifespan(43);
             realm.setActionTokenGeneratedByUserLifespan("myTokenType", 100);
@@ -793,7 +795,7 @@ public class RealmModelTest extends KeycloakModelTest {
             return null;
         });
 
-        withRealm(realmId, (s, realm) -> {
+        withRealm(testSession, REALM_NAME, (s, realm) -> {
             assertThat(realm.getActionTokenGeneratedByUserLifespan(), is(42));
             assertThat(realm.getActionTokenGeneratedByAdminLifespan(), is(43));
             assertThat(realm.getUserActionTokenLifespans().get("myTokenType"), is(100));
@@ -803,9 +805,10 @@ public class RealmModelTest extends KeycloakModelTest {
         });
     }
 
-    @Test
-    public void testRequiredCredentials() {
-        withRealm(realmId, (s, realm) -> {
+    @TestOnServer
+    public void testRequiredCredentials(KeycloakSession testSession) {
+
+        withRealm(testSession, REALM_NAME, (s, realm) -> {
             assertThrows(RuntimeException.class, () -> realm.addRequiredCredential("unknown"));
             realm.addRequiredCredential(RequiredCredentialModel.KERBEROS.getType());
 
@@ -816,12 +819,13 @@ public class RealmModelTest extends KeycloakModelTest {
             return null;
         });
 
-        withRealm(realmId, (s, realm) -> {
-            assertThat(realm.getRequiredCredentialsStream().collect(Collectors.toList()), hasSize(1));
+        withRealm(testSession, REALM_NAME, (s, realm) -> {
+            List<RequiredCredentialModel> kerberosCredentials = realm.getRequiredCredentialsStream()
+                    .filter(credential -> credential.getType().equals(RequiredCredentialModel.KERBEROS.getType()))
+                    .collect(Collectors.toList());
+            assertThat(kerberosCredentials, hasSize(1));
 
-            RequiredCredentialModel requiredCredentialModel = realm.getRequiredCredentialsStream()
-                    .collect(Collectors.toList())
-                    .get(0);
+            RequiredCredentialModel requiredCredentialModel = kerberosCredentials.get(0);
             assertThat(requiredCredentialModel.getType(), is(RequiredCredentialModel.KERBEROS.getType()));
             assertThat(requiredCredentialModel.getFormLabel(), is(RequiredCredentialModel.KERBEROS.getFormLabel()));
             assertThat(requiredCredentialModel.isInput(), is(RequiredCredentialModel.KERBEROS.isInput()));
@@ -835,12 +839,13 @@ public class RealmModelTest extends KeycloakModelTest {
             return null;
         });
 
-        withRealm(realmId, (s, realm) -> {
-            assertThat(realm.getRequiredCredentialsStream().collect(Collectors.toList()), hasSize(1));
+        withRealm(testSession, REALM_NAME, (s, realm) -> {
+            List<RequiredCredentialModel> kerberosCredentials = realm.getRequiredCredentialsStream()
+                    .filter(credential -> credential.getType().equals(RequiredCredentialModel.KERBEROS.getType()))
+                    .collect(Collectors.toList());
+            assertThat(kerberosCredentials, hasSize(1));
 
-            RequiredCredentialModel requiredCredentialModel = realm.getRequiredCredentialsStream()
-                    .collect(Collectors.toList())
-                    .get(0);
+            RequiredCredentialModel requiredCredentialModel = kerberosCredentials.get(0);
             assertThat(requiredCredentialModel.getType(), is(RequiredCredentialModel.KERBEROS.getType()));
             assertThat(requiredCredentialModel.getFormLabel(), is("changed"));
             assertThat(requiredCredentialModel.isInput(), is(true));
@@ -850,9 +855,10 @@ public class RealmModelTest extends KeycloakModelTest {
         });
     }
 
-    @Test
-    public void testUpdateRequiredCredentialsUnknownType() {
-        withRealm(realmId, (s, realm) -> {
+    @TestOnServer
+    public void testUpdateRequiredCredentialsUnknownType(KeycloakSession testSession) {
+
+        withRealm(testSession, REALM_NAME, (s, realm) -> {
             RuntimeException e =
                     assertThrows(RuntimeException.class, () -> realm.updateRequiredCredentials(Set.of("unknown")));
             assertThat(e.getMessage(), containsString("Unknown credential type unknown"));
@@ -860,33 +866,46 @@ public class RealmModelTest extends KeycloakModelTest {
         });
     }
 
-    @Test
-    public void testMasterAdminClient() {
-        withRealm(realmId, (s, realm) -> {
+    @TestOnServer
+    public void testMasterAdminClient(KeycloakSession testSession) {
+
+        String masterRealmId = inCommittedTransaction(testSession, (Function<KeycloakSession, String>)
+                s -> s.realms().getRealmByName("master").getId());
+        String previousMasterAdminClientId = withRealm(testSession, masterRealmId, (s, realm) -> {
+            ClientModel previousMasterAdminClient = realm.getMasterAdminClient();
             ClientModel client = s.clients().addClient(realm, "adminClient");
             realm.setMasterAdminClient(client);
 
-            return null;
+            return previousMasterAdminClient == null ? null : previousMasterAdminClient.getId();
         });
 
-        withRealm(realmId, (s, realm) -> {
+        withRealm(testSession, masterRealmId, (s, realm) -> {
             ClientModel masterAdminClient = realm.getMasterAdminClient();
             assertThat(masterAdminClient.getClientId(), is("adminClient"));
 
             return null;
         });
+
+        withRealm(testSession, masterRealmId, (s, realm) -> {
+            ClientModel adminClient = realm.getClientByClientId("adminClient");
+            realm.setMasterAdminClient(
+                    previousMasterAdminClientId == null ? null : realm.getClientById(previousMasterAdminClientId));
+            s.clients().removeClient(realm, adminClient.getId());
+            return null;
+        });
     }
 
-    @Test
-    public void testDefaultGroup() {
-        withRealm(realmId, (s, realm) -> {
+    @TestOnServer
+    public void testDefaultGroup(KeycloakSession testSession) {
+
+        withRealm(testSession, REALM_NAME, (s, realm) -> {
             GroupModel group = s.groups().createGroup(realm, "myGroup");
             realm.addDefaultGroup(group);
 
             return null;
         });
 
-        withRealm(realmId, (s, realm) -> {
+        withRealm(testSession, REALM_NAME, (s, realm) -> {
             assertThat(realm.getDefaultGroupsStream().collect(Collectors.toList()), hasSize(1));
             assertThat(
                     realm.getDefaultGroupsStream()
@@ -900,48 +919,50 @@ public class RealmModelTest extends KeycloakModelTest {
             return null;
         });
 
-        withRealm(realmId, (s, realm) -> {
+        withRealm(testSession, REALM_NAME, (s, realm) -> {
             assertThat(realm.getDefaultGroupsStream().collect(Collectors.toList()), hasSize(0));
             return null;
         });
     }
 
-    @Test
-    public void testDefaultClientScope() {
-        withRealm(realmId, (s, realm) -> {
+    @TestOnServer
+    public void testDefaultClientScope(KeycloakSession testSession) {
+
+        List<String> clientScopeIds = new ArrayList<>();
+        withRealm(testSession, REALM_NAME, (s, realm) -> {
             ClientScopeModel clientScope = s.clientScopes().addClientScope(realm, "myClientScope");
+            clientScopeIds.add(clientScope.getId());
             realm.addDefaultClientScope(clientScope, true);
 
             return null;
         });
 
-        withRealm(realmId, (s, realm) -> {
-            assertThat(realm.getDefaultClientScopesStream(true).collect(Collectors.toList()), hasSize(1));
-            assertThat(realm.getDefaultClientScopesStream(false).collect(Collectors.toList()), hasSize(0));
+        withRealm(testSession, REALM_NAME, (s, realm) -> {
             assertThat(
                     realm.getDefaultClientScopesStream(true)
                             .map(ClientScopeModel::getName)
-                            .findFirst()
-                            .orElse(null),
-                    is("myClientScope"));
+                            .collect(Collectors.toList()),
+                    hasItem("myClientScope"));
 
-            realm.removeDefaultClientScope(realm.getDefaultClientScopesStream(true)
-                    .collect(Collectors.toList())
-                    .get(0));
+            realm.removeDefaultClientScope(s.clientScopes().getClientScopeById(realm, clientScopeIds.get(0)));
             return null;
         });
 
-        withRealm(realmId, (s, realm) -> {
-            assertThat(realm.getDefaultClientScopesStream(true).collect(Collectors.toList()), hasSize(0));
-            assertThat(realm.getDefaultClientScopesStream(false).collect(Collectors.toList()), hasSize(0));
+        withRealm(testSession, REALM_NAME, (s, realm) -> {
+            assertThat(
+                    realm.getDefaultClientScopesStream(true)
+                            .map(ClientScopeModel::getName)
+                            .collect(Collectors.toList()),
+                    not(hasItem("myClientScope")));
 
             return null;
         });
     }
 
-    @Test
-    public void testProperties() {
-        withRealm(realmId, (s, realm) -> {
+    @TestOnServer
+    public void testProperties(KeycloakSession testSession) {
+
+        withRealm(testSession, REALM_NAME, (s, realm) -> {
             realm.setPasswordPolicy(PasswordPolicy.parse(s, PasswordPolicy.PASSWORD_HISTORY_ID));
             realm.setAccountTheme("myTheme");
             realm.setAdminTheme("myTheme");
@@ -952,7 +973,7 @@ public class RealmModelTest extends KeycloakModelTest {
             return null;
         });
 
-        withRealm(realmId, (s, realm) -> {
+        withRealm(testSession, REALM_NAME, (s, realm) -> {
             assertThat(
                     realm.getPasswordPolicy().toString(),
                     is(PasswordPolicy.parse(s, PasswordPolicy.PASSWORD_HISTORY_ID)

@@ -19,7 +19,9 @@ package de.arbeitsagentur.opdt.keycloak.cassandra.testsuite;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.*;
 import static org.junit.Assert.*;
+import static org.keycloak.models.utils.KeycloakModelUtils.getClientScopeByName;
 
+import de.arbeitsagentur.opdt.keycloak.cassandra.testsuite.cassandra.CassandraKeycloakServerConfig;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -28,43 +30,39 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import org.hamcrest.core.Is;
 import org.hamcrest.core.IsNull;
-import org.junit.Test;
 import org.keycloak.models.*;
+import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.utils.ModelToRepresentation;
 import org.keycloak.models.utils.RepresentationToModel;
 import org.keycloak.protocol.oidc.OIDCLoginProtocol;
 import org.keycloak.protocol.oidc.mappers.AddressMapper;
 import org.keycloak.representations.idm.ClientRepresentation;
 import org.keycloak.representations.idm.ProtocolMapperRepresentation;
+import org.keycloak.testframework.annotations.InjectRealm;
+import org.keycloak.testframework.annotations.KeycloakIntegrationTest;
+import org.keycloak.testframework.injection.LifeCycle;
+import org.keycloak.testframework.realm.ManagedRealm;
+import org.keycloak.testframework.remote.annotations.TestOnServer;
 
 /**
  * @author rmartinc
  */
-public class ClientModelTest extends KeycloakModelTest {
+@KeycloakIntegrationTest(config = CassandraKeycloakServerConfig.class)
+public class ClientModelTest extends CassandraModelTest {
+    private static final String REALM_NAME = "client-model";
 
-    private String realmId;
+    @InjectRealm(ref = REALM_NAME, lifecycle = LifeCycle.METHOD)
+    ManagedRealm managedRealm;
 
     private static final String searchClientId = "My ClIeNt WITH sP%Ces and sp*ci_l Ch***cters \" ?!";
 
-    @Override
-    public void createEnvironment(KeycloakSession s) {
-        RealmModel realm = s.realms().createRealm("realm");
-        realm.setDefaultRole(
-                s.roles().addRealmRole(realm, Constants.DEFAULT_ROLES_ROLE_PREFIX + "-" + realm.getName()));
-        this.realmId = realm.getId();
-    }
+    @TestOnServer
+    public void testClientsBasics(KeycloakSession testSession) {
 
-    @Override
-    public void cleanEnvironment(KeycloakSession s) {
-        s.realms().removeRealm(realmId);
-    }
-
-    @Test
-    public void testClientsBasics() {
         // Create client
-        ClientModel originalModel =
-                withRealm(realmId, (session, realm) -> session.clients().addClient(realm, "myClientId"));
-        ClientModel searchClient = withRealm(realmId, (session, realm) -> {
+        ClientModel originalModel = withRealm(
+                testSession, REALM_NAME, (session, realm) -> session.clients().addClient(realm, "myClientId"));
+        ClientModel searchClient = withRealm(testSession, REALM_NAME, (session, realm) -> {
             ClientModel client = session.clients().addClient(realm, searchClientId);
             client.setAlwaysDisplayInConsole(true);
             client.addRedirectUri("http://www.redirecturi.com");
@@ -74,8 +72,8 @@ public class ClientModelTest extends KeycloakModelTest {
 
         // Find by id
         {
-            ClientModel model = withRealm(
-                    realmId, (session, realm) -> session.clients().getClientById(realm, originalModel.getId()));
+            ClientModel model = withRealm(testSession, REALM_NAME, (session, realm) -> session.clients()
+                    .getClientById(realm, originalModel.getId()));
             assertThat(model, notNullValue());
             assertThat(model.getId(), is(equalTo(model.getId())));
             assertThat(model.getClientId(), is(equalTo("myClientId")));
@@ -83,8 +81,8 @@ public class ClientModelTest extends KeycloakModelTest {
 
         // Find by clientId
         {
-            ClientModel model =
-                    withRealm(realmId, (session, realm) -> session.clients().getClientByClientId(realm, "myClientId"));
+            ClientModel model = withRealm(testSession, REALM_NAME, (session, realm) -> session.clients()
+                    .getClientByClientId(realm, "myClientId"));
             assertThat(model, notNullValue());
             assertThat(model.getId(), is(equalTo(originalModel.getId())));
             assertThat(model.getClientId(), is(equalTo("myClientId")));
@@ -92,7 +90,7 @@ public class ClientModelTest extends KeycloakModelTest {
 
         // Search by clientId
         {
-            withRealm(realmId, (session, realm) -> {
+            withRealm(testSession, REALM_NAME, (session, realm) -> {
                 ClientModel client = session.clients()
                         .searchClientsByClientIdStream(realm, "client with", 0, 10)
                         .findFirst()
@@ -103,7 +101,7 @@ public class ClientModelTest extends KeycloakModelTest {
                 return null;
             });
 
-            withRealm(realmId, (session, realm) -> {
+            withRealm(testSession, REALM_NAME, (session, realm) -> {
                 ClientModel client = session.clients()
                         .searchClientsByClientIdStream(realm, "sp*ci_l Ch***cters", 0, 10)
                         .findFirst()
@@ -114,7 +112,7 @@ public class ClientModelTest extends KeycloakModelTest {
                 return null;
             });
 
-            withRealm(realmId, (session, realm) -> {
+            withRealm(testSession, REALM_NAME, (session, realm) -> {
                 ClientModel client = session.clients()
                         .searchClientsByClientIdStream(realm, " AND ", 0, 10)
                         .findFirst()
@@ -125,13 +123,14 @@ public class ClientModelTest extends KeycloakModelTest {
                 return null;
             });
 
-            withRealm(realmId, (session, realm) -> {
+            withRealm(testSession, REALM_NAME, (session, realm) -> {
                 // when searching by "%" all entries are expected
                 assertThat(
                         session.clients()
                                 .searchClientsByClientIdStream(realm, "%", 0, 10)
-                                .count(),
-                        is(equalTo(2L)));
+                                .map(ClientModel::getClientId)
+                                .collect(Collectors.toList()),
+                        hasItems("myClientId", searchClientId));
                 return null;
             });
         }
@@ -139,34 +138,38 @@ public class ClientModelTest extends KeycloakModelTest {
         // using Boolean operand
         {
             Map<ClientModel, Set<String>> allRedirectUrisOfEnabledClients =
-                    withRealm(realmId, (session, realm) -> session.clients().getAllRedirectUrisOfEnabledClients(realm));
-            assertThat(allRedirectUrisOfEnabledClients.values(), hasSize(1));
-            assertThat(
-                    allRedirectUrisOfEnabledClients.keySet().iterator().next().getId(),
-                    is(equalTo(searchClient.getId())));
+                    withRealm(testSession, REALM_NAME, (session, realm) -> session.clients()
+                            .getAllRedirectUrisOfEnabledClients(realm));
+            List<ClientModel> clientsWithRedirect = allRedirectUrisOfEnabledClients.entrySet().stream()
+                    .filter(entry -> entry.getValue().contains("http://www.redirecturi.com"))
+                    .map(Map.Entry::getKey)
+                    .collect(Collectors.toList());
+            assertThat(clientsWithRedirect, hasSize(1));
+            assertThat(clientsWithRedirect.get(0).getId(), is(equalTo(searchClient.getId())));
         }
 
         // Test storing flow binding override
         {
             // Add some override
-            withRealm(realmId, (session, realm) -> {
+            withRealm(testSession, REALM_NAME, (session, realm) -> {
                 ClientModel clientById = session.clients().getClientById(realm, originalModel.getId());
                 clientById.setAuthenticationFlowBindingOverride("browser", "customFlowId");
                 return clientById;
             });
 
-            String browser = withRealm(realmId, (session, realm) -> session.clients()
+            String browser = withRealm(testSession, REALM_NAME, (session, realm) -> session.clients()
                     .getClientById(realm, originalModel.getId())
                     .getAuthenticationFlowBindingOverride("browser"));
             assertThat(browser, is(equalTo("customFlowId")));
         }
     }
 
-    @Test
-    public void testScopeMappingRoleRemoval() {
+    @TestOnServer
+    public void testScopeMappingRoleRemoval(KeycloakSession testSession) {
+
         // create two clients, one realm role and one client role and assign both to one of the clients
-        inComittedTransaction(1, (session, i) -> {
-            final RealmModel realm = session.realms().getRealm(realmId);
+        inCommittedTransaction(testSession, 1, (session, i) -> {
+            final RealmModel realm = session.realms().getRealmByName(REALM_NAME);
             ClientModel client1 = session.clients().addClient(realm, "client1");
             ClientModel client2 = session.clients().addClient(realm, "client2");
             RoleModel realmRole = session.roles().addRealmRole(realm, "realm-role");
@@ -177,8 +180,8 @@ public class ClientModelTest extends KeycloakModelTest {
         });
 
         // check everything is OK
-        inComittedTransaction(1, (session, i) -> {
-            final RealmModel realm = session.realms().getRealm(realmId);
+        inCommittedTransaction(testSession, 1, (session, i) -> {
+            final RealmModel realm = session.realms().getRealmByName(REALM_NAME);
             final ClientModel client1 = session.clients().getClientByClientId(realm, "client1");
             assertThat(client1.getScopeMappingsStream().count(), is(2L));
             assertThat(
@@ -195,16 +198,16 @@ public class ClientModelTest extends KeycloakModelTest {
         });
 
         // remove the realm role
-        inComittedTransaction(1, (session, i) -> {
-            final RealmModel realm = session.realms().getRealm(realmId);
+        inCommittedTransaction(testSession, 1, (session, i) -> {
+            final RealmModel realm = session.realms().getRealmByName(REALM_NAME);
             final RoleModel role = session.roles().getRealmRole(realm, "realm-role");
             session.roles().removeRole(role);
             return null;
         });
 
         // check it is removed
-        inComittedTransaction(1, (session, i) -> {
-            final RealmModel realm = session.realms().getRealm(realmId);
+        inCommittedTransaction(testSession, 1, (session, i) -> {
+            final RealmModel realm = session.realms().getRealmByName(REALM_NAME);
             final ClientModel client1 = session.clients().getClientByClientId(realm, "client1");
             assertThat(client1.getScopeMappingsStream().count(), is(1L));
             assertThat(
@@ -216,8 +219,8 @@ public class ClientModelTest extends KeycloakModelTest {
         });
 
         // remove client role
-        inComittedTransaction(1, (session, i) -> {
-            final RealmModel realm = session.realms().getRealm(realmId);
+        inCommittedTransaction(testSession, 1, (session, i) -> {
+            final RealmModel realm = session.realms().getRealmByName(REALM_NAME);
             final ClientModel client2 = session.clients().getClientByClientId(realm, "client2");
             final RoleModel role = session.roles().getClientRole(client2, "client2-role");
             session.roles().removeRole(role);
@@ -225,16 +228,16 @@ public class ClientModelTest extends KeycloakModelTest {
         });
 
         // check both clients are removed
-        inComittedTransaction(1, (session, i) -> {
-            final RealmModel realm = session.realms().getRealm(realmId);
+        inCommittedTransaction(testSession, 1, (session, i) -> {
+            final RealmModel realm = session.realms().getRealmByName(REALM_NAME);
             final ClientModel client1 = session.clients().getClientByClientId(realm, "client1");
             assertThat(client1.getScopeMappingsStream().count(), is(0L));
             return null;
         });
 
         // remove clients
-        inComittedTransaction(1, (session, i) -> {
-            final RealmModel realm = session.realms().getRealm(realmId);
+        inCommittedTransaction(testSession, 1, (session, i) -> {
+            final RealmModel realm = session.realms().getRealmByName(REALM_NAME);
             final ClientModel client1 = session.clients().getClientByClientId(realm, "client1");
             final ClientModel client2 = session.clients().getClientByClientId(realm, "client2");
             session.clients().removeClient(realm, client1.getId());
@@ -243,10 +246,11 @@ public class ClientModelTest extends KeycloakModelTest {
         });
     }
 
-    @Test
-    public void testClientScopes() {
+    @TestOnServer
+    public void testClientScopes(KeycloakSession testSession) {
+
         List<String> clientScopes = new LinkedList<>();
-        withRealm(realmId, (session, realm) -> {
+        withRealm(testSession, REALM_NAME, (session, realm) -> {
             ClientModel client = session.clients().addClient(realm, "myClientId");
 
             ClientScopeModel clientScope1 = session.clientScopes().addClientScope(realm, "myClientScope1");
@@ -260,12 +264,12 @@ public class ClientModelTest extends KeycloakModelTest {
             return null;
         });
 
-        withRealm(realmId, (session, realm) -> {
+        withRealm(testSession, REALM_NAME, (session, realm) -> {
             List<String> actualClientScopes = session.clientScopes()
                     .getClientScopesStream(realm)
                     .map(ClientScopeModel::getId)
                     .collect(Collectors.toList());
-            assertThat(actualClientScopes, containsInAnyOrder(clientScopes.toArray()));
+            assertThat(actualClientScopes, hasItems(clientScopes.toArray(String[]::new)));
 
             ClientScopeModel clientScopeById = session.clientScopes().getClientScopeById(realm, clientScopes.get(0));
             assertThat(clientScopeById.getId(), is(clientScopes.get(0)));
@@ -275,7 +279,7 @@ public class ClientModelTest extends KeycloakModelTest {
             return null;
         });
 
-        withRealm(realmId, (session, realm) -> {
+        withRealm(testSession, REALM_NAME, (session, realm) -> {
             List<ClientScopeModel> actualClientScopes =
                     session.clientScopes().getClientScopesStream(realm).collect(Collectors.toList());
             assertThat(actualClientScopes, empty());
@@ -296,7 +300,7 @@ public class ClientModelTest extends KeycloakModelTest {
         assertThat(expected.getRegisteredNodes(), Is.is(actual.getRegisteredNodes()));
     }
 
-    private ClientModel setUpClient(RealmModel realm) {
+    private static ClientModel setUpClient(RealmModel realm) {
         ClientModel client = realm.addClient("application");
         client.setName("Application");
         client.setDescription("Description");
@@ -318,13 +322,38 @@ public class ClientModelTest extends KeycloakModelTest {
         return client;
     }
 
-    @Test
-    public void testClientRoleRemovalAndClientScope() {
+    private static void addReferencedClientScopes(RealmModel realm, ClientRepresentation representation) {
+        addReferencedClientScopes(realm, representation.getDefaultClientScopes(), representation.getProtocol());
+        addReferencedClientScopes(realm, representation.getOptionalClientScopes(), representation.getProtocol());
+    }
+
+    private static void addReferencedClientScopes(RealmModel realm, List<String> scopeNames, String protocol) {
+        if (scopeNames == null) {
+            return;
+        }
+
+        for (String scopeName : scopeNames) {
+            ClientScopeModel clientScope = getClientScopeByName(realm, scopeName);
+            if (clientScope == null) {
+                clientScope = realm.addClientScope(scopeName);
+                clientScope.setProtocol(protocol);
+            }
+        }
+    }
+
+    private static void assertClientScopes(Map<String, ClientScopeModel> actual, List<String> expected) {
+        List<String> expectedScopeNames = expected == null ? List.of() : expected;
+        assertThat(actual.keySet(), containsInAnyOrder(expectedScopeNames.toArray(String[]::new)));
+    }
+
+    @TestOnServer
+    public void testClientRoleRemovalAndClientScope(KeycloakSession testSession) {
+
         // Client "from" has a role.  Assign this role to a scope to client "scoped".  Delete the role
         // and make sure
         // cache gets cleared
 
-        String roleId = withRealm(realmId, (session, realm) -> {
+        String roleId = withRealm(testSession, REALM_NAME, (session, realm) -> {
             assertThat("Realm Model 'original' is NULL !!", realm, IsNull.notNullValue());
             ClientModel from = realm.addClient("from");
 
@@ -336,7 +365,7 @@ public class ClientModelTest extends KeycloakModelTest {
             return role.getId();
         });
 
-        withRealm(realmId, (session, realm) -> {
+        withRealm(testSession, REALM_NAME, (session, realm) -> {
             assertThat("Realm Model 'original' is NULL !!", realm, IsNull.notNullValue());
             ClientModel from = realm.getClientByClientId("from");
 
@@ -346,7 +375,7 @@ public class ClientModelTest extends KeycloakModelTest {
             return null;
         });
 
-        withRealm(realmId, (session, realm) -> {
+        withRealm(testSession, REALM_NAME, (session, realm) -> {
             assertThat("Realm Model 'original' is NULL !!", realm, IsNull.notNullValue());
             ClientModel scoped = realm.getClientByClientId("scoped");
 
@@ -358,13 +387,14 @@ public class ClientModelTest extends KeycloakModelTest {
         });
     }
 
-    @Test
-    public void testClientRoleRemovalAndClientScopeSameTx() {
+    @TestOnServer
+    public void testClientRoleRemovalAndClientScopeSameTx(KeycloakSession testSession) {
+
         // Client "from" has a role.  Assign this role to a scope to client "scoped".  Delete the role
         // and make sure
         // cache gets cleared
 
-        String roleId = withRealm(realmId, (session, realm) -> {
+        String roleId = withRealm(testSession, REALM_NAME, (session, realm) -> {
             ClientModel from = realm.addClient("from");
             RoleModel role = from.addRole("clientRole");
             ClientModel scoped = realm.addClient("scoped");
@@ -375,7 +405,7 @@ public class ClientModelTest extends KeycloakModelTest {
             return role.getId();
         });
 
-        withRealm(realmId, (session, realm) -> {
+        withRealm(testSession, REALM_NAME, (session, realm) -> {
             ClientModel from = realm.getClientByClientId("from");
             RoleModel role = session.roles().getRoleById(realm, roleId);
             from.removeRole(role);
@@ -391,13 +421,14 @@ public class ClientModelTest extends KeycloakModelTest {
         });
     }
 
-    @Test
-    public void testRealmRoleRemovalAndClientScope() {
+    @TestOnServer
+    public void testRealmRoleRemovalAndClientScope(KeycloakSession testSession) {
+
         // Client "from" has a role.  Assign this role to a scope to client "scoped".  Delete the role
         // and make sure
         // cache gets cleared
 
-        String roleId = withRealm(realmId, (session, realm) -> {
+        String roleId = withRealm(testSession, REALM_NAME, (session, realm) -> {
             RoleModel role = realm.addRole("clientRole");
             ClientModel scoped = realm.addClient("scoped");
             scoped.setFullScopeAllowed(false);
@@ -406,13 +437,13 @@ public class ClientModelTest extends KeycloakModelTest {
             return role.getId();
         });
 
-        withRealm(realmId, (session, realm) -> {
+        withRealm(testSession, REALM_NAME, (session, realm) -> {
             RoleModel role = session.roles().getRoleById(realm, roleId);
             realm.removeRole(role);
             return null;
         });
 
-        withRealm(realmId, (session, realm) -> {
+        withRealm(testSession, REALM_NAME, (session, realm) -> {
             ClientModel scoped = realm.getClientByClientId("scoped");
             // used to throw an NPE
             assertThat(
@@ -422,11 +453,11 @@ public class ClientModelTest extends KeycloakModelTest {
         });
     }
 
-    @Test
+    @TestOnServer
     @SuppressWarnings("java:S2699")
-    public void testCircularClientScopes() {
+    public void testCircularClientScopes(KeycloakSession testSession) {
 
-        withRealm(realmId, (session, realm) -> {
+        withRealm(testSession, REALM_NAME, (session, realm) -> {
             ClientModel scoped1 = realm.addClient("scoped1");
             RoleModel role1 = scoped1.addRole("role1");
             ClientModel scoped2 = realm.addClient("scoped2");
@@ -436,7 +467,7 @@ public class ClientModelTest extends KeycloakModelTest {
             return null;
         });
 
-        withRealm(realmId, (session, realm) -> {
+        withRealm(testSession, REALM_NAME, (session, realm) -> {
 
             // this hit the circular cache and failed with a stack overflow
             ClientModel scoped1 = realm.getClientByClientId("scoped1");
@@ -445,9 +476,10 @@ public class ClientModelTest extends KeycloakModelTest {
         });
     }
 
-    @Test
-    public void persist() {
-        withRealm(realmId, (session, realm) -> {
+    @TestOnServer
+    public void persist(KeycloakSession testSession) {
+
+        withRealm(testSession, REALM_NAME, (session, realm) -> {
             ClientModel client = setUpClient(realm);
             ClientModel actual = realm.getClientByClientId("app-name");
 
@@ -461,9 +493,10 @@ public class ClientModelTest extends KeycloakModelTest {
         });
     }
 
-    @Test
-    public void json() {
-        withRealm(realmId, (session, realm) -> {
+    @TestOnServer
+    public void json(KeycloakSession testSession) {
+
+        withRealm(testSession, REALM_NAME, (session, realm) -> {
             ClientModel client = setUpClient(realm);
             ClientRepresentation representation = ModelToRepresentation.toRepresentation(client, session);
             representation.setId(null);
@@ -471,28 +504,30 @@ public class ClientModelTest extends KeycloakModelTest {
                 protocolMapper.setId(null);
             }
 
-            realm = session.realms().createRealm("copy");
-            ClientModel copyClient = RepresentationToModel.createClient(session, realm, representation);
+            RealmModel copyRealm = session.realms().createRealm("copy");
+            addReferencedClientScopes(copyRealm, representation);
+            ClientModel copyClient = RepresentationToModel.createClient(session, copyRealm, representation);
 
             assertEquals(client, copyClient);
+            assertClientScopes(copyClient.getClientScopes(true), representation.getDefaultClientScopes());
+            assertClientScopes(copyClient.getClientScopes(false), representation.getOptionalClientScopes());
 
             client.unregisterNode("node1");
             client.unregisterNode("10.20.30.40");
 
-            session.clients().removeClient(realm, client.getId());
-            session.clients().removeClient(realm, copyClient.getId());
-            session.realms().removeRealm(realm.getId());
+            session.realms().removeRealm(copyRealm.getId());
             return null;
         });
     }
 
-    @Test
-    public void testClientScopesBinding() {
+    @TestOnServer
+    public void testClientScopesBinding(KeycloakSession testSession) {
+
         AtomicReference<ClientScopeModel> scope1Atomic = new AtomicReference<>();
         AtomicReference<ClientScopeModel> scope2Atomic = new AtomicReference<>();
         AtomicReference<ClientScopeModel> scope3Atomic = new AtomicReference<>();
 
-        withRealm(realmId, (session, realm) -> {
+        withRealm(testSession, REALM_NAME, (session, realm) -> {
             ClientModel client = realm.addClient("templatized");
             client.setProtocol(OIDCLoginProtocol.LOGIN_PROTOCOL);
 
@@ -510,7 +545,7 @@ public class ClientModelTest extends KeycloakModelTest {
             return null;
         });
 
-        withRealm(realmId, (session, realm) -> {
+        withRealm(testSession, REALM_NAME, (session, realm) -> {
             ClientModel client = realm.getClientByClientId("templatized");
 
             ClientScopeModel scope1 = scope1Atomic.get();
@@ -527,7 +562,7 @@ public class ClientModelTest extends KeycloakModelTest {
             return null;
         });
 
-        withRealm(realmId, (session, realm) -> {
+        withRealm(testSession, REALM_NAME, (session, realm) -> {
             ClientModel client = realm.getClientByClientId("templatized");
 
             ClientScopeModel scope1 = scope1Atomic.get();
@@ -549,7 +584,7 @@ public class ClientModelTest extends KeycloakModelTest {
             return null;
         });
 
-        withRealm(realmId, (session, realm) -> {
+        withRealm(testSession, REALM_NAME, (session, realm) -> {
             ClientModel client = realm.getClientByClientId("templatized");
             ClientScopeModel scope3 = scope3Atomic.get();
 
@@ -572,13 +607,14 @@ public class ClientModelTest extends KeycloakModelTest {
         });
     }
 
-    @Test
-    public void testDefaultDefaultClientScopes() {
+    @TestOnServer
+    public void testDefaultDefaultClientScopes(KeycloakSession testSession) {
+
         AtomicReference<ClientScopeModel> scope1Atomic = new AtomicReference<>();
         AtomicReference<ClientScopeModel> scope2Atomic = new AtomicReference<>();
         AtomicReference<ClientScopeModel> scope3Atomic = new AtomicReference<>();
 
-        withRealm(realmId, (session, realm) -> {
+        withRealm(testSession, REALM_NAME, (session, realm) -> {
             ClientScopeModel scope1 = realm.addClientScope("scope1");
             scope1.setProtocol(OIDCLoginProtocol.LOGIN_PROTOCOL);
             scope1Atomic.set(scope1);
@@ -593,7 +629,7 @@ public class ClientModelTest extends KeycloakModelTest {
             return null;
         });
 
-        withRealm(realmId, (session, realm) -> {
+        withRealm(testSession, REALM_NAME, (session, realm) -> {
             ClientScopeModel scope1 = scope1Atomic.get();
             ClientScopeModel scope2 = scope2Atomic.get();
             ClientScopeModel scope3 = scope3Atomic.get();
@@ -608,13 +644,13 @@ public class ClientModelTest extends KeycloakModelTest {
             return null;
         });
 
-        withRealm(realmId, (session, realm) -> {
+        withRealm(testSession, REALM_NAME, (session, realm) -> {
             ClientModel client = realm.addClient("foo");
             client.setProtocol(OIDCLoginProtocol.LOGIN_PROTOCOL);
             return null;
         });
 
-        withRealm(realmId, (session, realm) -> {
+        withRealm(testSession, REALM_NAME, (session, realm) -> {
             ClientModel client = realm.getClientByClientId("foo");
 
             ClientScopeModel scope1 = scope1Atomic.get();
@@ -638,13 +674,13 @@ public class ClientModelTest extends KeycloakModelTest {
             return null;
         });
 
-        withRealm(realmId, (session, realm) -> {
+        withRealm(testSession, REALM_NAME, (session, realm) -> {
             ClientModel client = realm.addClient("foo2");
             client.setProtocol(OIDCLoginProtocol.LOGIN_PROTOCOL);
             return null;
         });
 
-        withRealm(realmId, (session, realm) -> {
+        withRealm(testSession, REALM_NAME, (session, realm) -> {
             ClientModel client = realm.getClientByClientId("foo2");
 
             Map<String, ClientScopeModel> clientScopes1 = client.getClientScopes(true);
@@ -667,9 +703,10 @@ public class ClientModelTest extends KeycloakModelTest {
         });
     }
 
-    @Test
-    public void testProperties() {
-        String clientId = withRealm(realmId, (s, realm) -> {
+    @TestOnServer
+    public void testProperties(KeycloakSession testSession) {
+
+        String clientId = withRealm(testSession, REALM_NAME, (s, realm) -> {
             ClientModel client = setUpClient(realm);
             client.removeRedirectUri("redirect-1");
             client.setSecret("4711");
@@ -679,7 +716,7 @@ public class ClientModelTest extends KeycloakModelTest {
             return client.getId();
         });
 
-        withRealm(realmId, (s, realm) -> {
+        withRealm(testSession, REALM_NAME, (s, realm) -> {
             ClientModel client = s.clients().getClientById(realm, clientId);
             assertThat(client.getRedirectUris(), hasSize(1));
             assertThat(client.getRedirectUris(), containsInAnyOrder("redirect-2"));
@@ -693,7 +730,7 @@ public class ClientModelTest extends KeycloakModelTest {
             return null;
         });
 
-        withRealm(realmId, (s, realm) -> {
+        withRealm(testSession, REALM_NAME, (s, realm) -> {
             ClientModel client = s.clients().getClientById(realm, clientId);
             assertNull(client.getAuthenticationFlowBindingOverride("binding1"));
             assertThat(client.getAuthenticationFlowBindingOverrides().entrySet(), hasSize(0));
@@ -702,12 +739,13 @@ public class ClientModelTest extends KeycloakModelTest {
         });
     }
 
-    @Test
-    public void testProtocolMappers() {
-        String clientId =
-                withRealm(realmId, (s, realm) -> realm.addClient("testClient").getId());
+    @TestOnServer
+    public void testProtocolMappers(KeycloakSession testSession) {
 
-        String mapperId = withRealm(realmId, (s, realm) -> {
+        String clientId = withRealm(testSession, REALM_NAME, (s, realm) -> realm.addClient("testClient")
+                .getId());
+
+        String mapperId = withRealm(testSession, REALM_NAME, (s, realm) -> {
             ClientModel client = s.clients().getClientById(realm, clientId);
             ProtocolMapperModel mapper = new ProtocolMapperModel();
             mapper.setName("test");
@@ -719,7 +757,7 @@ public class ClientModelTest extends KeycloakModelTest {
             return client.addProtocolMapper(mapper).getId();
         });
 
-        withRealm(realmId, (s, realm) -> {
+        withRealm(testSession, REALM_NAME, (s, realm) -> {
             ClientModel client = s.clients().getClientById(realm, clientId);
             ProtocolMapperModel mapper = client.getProtocolMapperById(mapperId);
             assertThat(mapper.getName(), is("test"));
@@ -735,7 +773,7 @@ public class ClientModelTest extends KeycloakModelTest {
             return null;
         });
 
-        withRealm(realmId, (s, realm) -> {
+        withRealm(testSession, REALM_NAME, (s, realm) -> {
             ClientModel client = s.clients().getClientById(realm, clientId);
             ProtocolMapperModel mapper = client.getProtocolMapperByName("oidc", "test");
             assertThat(mapper.getName(), is("test"));
@@ -750,7 +788,7 @@ public class ClientModelTest extends KeycloakModelTest {
             return null;
         });
 
-        withRealm(realmId, (s, realm) -> {
+        withRealm(testSession, REALM_NAME, (s, realm) -> {
             ClientModel client = s.clients().getClientById(realm, clientId);
             assertThat(client.getProtocolMappersStream().collect(Collectors.toList()), hasSize(0));
 
@@ -758,12 +796,13 @@ public class ClientModelTest extends KeycloakModelTest {
         });
     }
 
-    @Test
-    public void testScopeMappings() {
-        String clientId =
-                withRealm(realmId, (s, realm) -> realm.addClient("testClient").getId());
+    @TestOnServer
+    public void testScopeMappings(KeycloakSession testSession) {
 
-        withRealm(realmId, (s, realm) -> {
+        String clientId = withRealm(testSession, REALM_NAME, (s, realm) -> realm.addClient("testClient")
+                .getId());
+
+        withRealm(testSession, REALM_NAME, (s, realm) -> {
             ClientModel client = s.clients().getClientById(realm, clientId);
             RoleModel realmRole = s.roles().addRealmRole(realm, "realmRole");
             realmRole.addCompositeRole(s.roles().addRealmRole(realm, "compositeRole"));
@@ -773,7 +812,7 @@ public class ClientModelTest extends KeycloakModelTest {
             return null;
         });
 
-        withRealm(realmId, (s, realm) -> {
+        withRealm(testSession, REALM_NAME, (s, realm) -> {
             ClientModel client = s.clients().getClientById(realm, clientId);
 
             assertTrue(client.hasScope(s.roles().getRealmRole(realm, "realmRole")));
@@ -788,7 +827,7 @@ public class ClientModelTest extends KeycloakModelTest {
             return null;
         });
 
-        withRealm(realmId, (s, realm) -> {
+        withRealm(testSession, REALM_NAME, (s, realm) -> {
             ClientModel client = s.clients().getClientById(realm, clientId);
 
             assertFalse(client.hasScope(s.roles().getRealmRole(realm, "realmRole")));
@@ -804,12 +843,13 @@ public class ClientModelTest extends KeycloakModelTest {
         });
     }
 
-    @Test
-    public void testClientScopesCrud() {
-        String clientId =
-                withRealm(realmId, (s, realm) -> realm.addClient("testClient").getId());
+    @TestOnServer
+    public void testClientScopesCrud(KeycloakSession testSession) {
 
-        withRealm(realmId, (s, realm) -> {
+        String clientId = withRealm(testSession, REALM_NAME, (s, realm) -> realm.addClient("testClient")
+                .getId());
+
+        withRealm(testSession, REALM_NAME, (s, realm) -> {
             ClientModel client = s.clients().getClientById(realm, clientId);
             ClientScopeModel scope1 = s.clientScopes().addClientScope(realm, "scope1");
             scope1.setProtocol("openid-connect");
@@ -823,51 +863,49 @@ public class ClientModelTest extends KeycloakModelTest {
             return null;
         });
 
-        withRealm(realmId, (s, realm) -> {
+        withRealm(testSession, REALM_NAME, (s, realm) -> {
             ClientModel client = s.clients().getClientById(realm, clientId);
             Map<String, ClientScopeModel> defaultScopes = s.clients().getClientScopes(realm, client, true);
             Map<String, ClientScopeModel> nonDefaultScopes = s.clients().getClientScopes(realm, client, false);
 
-            assertThat(defaultScopes.values(), hasSize(2));
-            assertThat(defaultScopes.keySet(), containsInAnyOrder("scope1", "scope2"));
-            assertThat(nonDefaultScopes.values(), hasSize(1));
-            assertThat(nonDefaultScopes.keySet(), containsInAnyOrder("scope3"));
+            assertThat(defaultScopes.keySet(), hasItems("scope1", "scope2"));
+            assertThat(nonDefaultScopes.keySet(), hasItem("scope3"));
 
             s.clients().removeClientScope(realm, client, defaultScopes.get("scope2"));
 
             return null;
         });
 
-        withRealm(realmId, (s, realm) -> {
+        withRealm(testSession, REALM_NAME, (s, realm) -> {
             ClientModel client = s.clients().getClientById(realm, clientId);
             Map<String, ClientScopeModel> defaultScopes = s.clients().getClientScopes(realm, client, true);
             Map<String, ClientScopeModel> nonDefaultScopes = s.clients().getClientScopes(realm, client, false);
 
-            assertThat(defaultScopes.values(), hasSize(1));
-            assertThat(defaultScopes.keySet(), containsInAnyOrder("scope1"));
-            assertThat(nonDefaultScopes.values(), hasSize(1));
-            assertThat(nonDefaultScopes.keySet(), containsInAnyOrder("scope3"));
+            assertThat(defaultScopes.keySet(), hasItem("scope1"));
+            assertThat(defaultScopes.keySet(), not(hasItem("scope2")));
+            assertThat(nonDefaultScopes.keySet(), hasItem("scope3"));
 
             return null;
         });
     }
 
-    @Test
-    public void testClientSearch() {
-        String clientId =
-                withRealm(realmId, (s, realm) -> realm.addClient("testClient").getId());
+    @TestOnServer
+    public void testClientSearch(KeycloakSession testSession) {
 
-        withRealm(realmId, (s, realm) -> {
+        String clientId = withRealm(testSession, REALM_NAME, (s, realm) -> realm.addClient("testClient")
+                .getId());
+
+        withRealm(testSession, REALM_NAME, (s, realm) -> {
             ClientModel client = s.clients().getClientById(realm, clientId);
             client.setAttribute("key1", "val1");
 
             return null;
         });
 
-        withRealm(realmId, (s, realm) -> {
+        withRealm(testSession, REALM_NAME, (s, realm) -> {
             ClientModel client = s.clients().getClientById(realm, clientId);
 
-            assertThat(s.clients().getClientsCount(realm), is(1L));
+            assertThat(s.clients().getClientsCount(realm), greaterThanOrEqualTo(1L));
             List<ClientModel> clientsByClientId = s.clients()
                     .searchClientsByClientIdStream(realm, "testClient", 0, 10)
                     .collect(Collectors.toList());
