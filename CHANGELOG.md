@@ -1,5 +1,12 @@
 # Changelog
 
+## [5.7.0](https://github.com/ba-itsys/keycloak-cassandra-extension/compare/v5.6.2...v5.7.0) (2026-05-27)
+
+
+### Features
+
+* migrate to new keycloak testframework ([#289](https://github.com/ba-itsys/keycloak-cassandra-extension/issues/289)) ([2702e87](https://github.com/ba-itsys/keycloak-cassandra-extension/commit/2702e870936033deae665f87c6bd11ec4b7eabea))
+
 ## [5.6.2](https://github.com/ba-itsys/keycloak-cassandra-extension/compare/v5.6.1...v5.6.2) (2026-05-26)
 
 
