@@ -59,7 +59,7 @@
     <asm.version>9.10.1</asm.version>
 
     <!-- cassandra -->
-    <cassandra-java-driver.version>4.19.2</cassandra-java-driver.version>
+    <cassandra-java-driver.version>4.19.3</cassandra-java-driver.version>
 
   </properties>
 
