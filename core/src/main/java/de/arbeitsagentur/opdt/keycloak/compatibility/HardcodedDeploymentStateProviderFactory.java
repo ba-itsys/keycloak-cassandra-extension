@@ -22,13 +22,14 @@ import static de.arbeitsagentur.opdt.keycloak.common.ProviderHelpers.createProvi
 import static org.keycloak.userprofile.DeclarativeUserProfileProviderFactory.PROVIDER_PRIORITY;
 
 import com.google.auto.service.AutoService;
+import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.HexFormat;
 import java.util.Map;
 import org.jboss.logging.Logger;
 import org.keycloak.Config;
 import org.keycloak.common.Version;
-import org.keycloak.common.util.Base64Url;
 import org.keycloak.common.util.SecretGenerator;
 import org.keycloak.migration.MigrationModel;
 import org.keycloak.models.*;
@@ -63,8 +64,9 @@ public class HardcodedDeploymentStateProviderFactory
             seed = SecretGenerator.getInstance().randomString(10);
         }
         try {
-            Version.RESOURCES_VERSION = Base64Url.encode(
-                            MessageDigest.getInstance("SHA-256").digest((seed + Version.RESOURCES_VERSION).getBytes()))
+            Version.RESOURCES_VERSION = HexFormat.of()
+                    .formatHex(MessageDigest.getInstance("SHA-256")
+                            .digest((seed + Version.VERSION).getBytes(StandardCharsets.UTF_8)))
                     .substring(0, 5);
         } catch (NoSuchAlgorithmException e) {
             throw new RuntimeException(e);
