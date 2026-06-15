@@ -1,5 +1,19 @@
 # Changelog
 
+## [5.7.1](https://github.com/ba-itsys/keycloak-cassandra-extension/compare/v5.7.0...v5.7.1) (2026-06-15)
+
+
+### Bug Fixes
+
+* resource version must adhere to keycloak format ([f9330fc](https://github.com/ba-itsys/keycloak-cassandra-extension/commit/f9330fc7b8236ce75e5974d7858ffc89e88a170b))
+
+
+### Dependencies
+
+* **deps-dev:** bump asm.version from 9.10 to 9.10.1 ([1bae9de](https://github.com/ba-itsys/keycloak-cassandra-extension/commit/1bae9de786f212cb5dfb7fc9c40b382ac2eea5b4))
+* **deps-dev:** bump com.diffplug.spotless:spotless-maven-plugin ([e587ef1](https://github.com/ba-itsys/keycloak-cassandra-extension/commit/e587ef142a61f5a3dccb581ba40be50a443f1f96))
+* **deps-dev:** bump org.apache.maven.plugins:maven-surefire-plugin ([65bb33d](https://github.com/ba-itsys/keycloak-cassandra-extension/commit/65bb33d85fe573419508e5323f3bf8aac2c3847c))
+
 ## [5.7.0](https://github.com/ba-itsys/keycloak-cassandra-extension/compare/v5.6.2...v5.7.0) (2026-05-27)
 
 
