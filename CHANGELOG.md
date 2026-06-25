@@ -1,5 +1,20 @@
 # Changelog
 
+## [5.7.2](https://github.com/ba-itsys/keycloak-cassandra-extension/compare/v5.7.1...v5.7.2) (2026-06-25)
+
+
+### Bug Fixes
+
+* downgrade to java 21, which is used by keycloak itself as well ([78ede25](https://github.com/ba-itsys/keycloak-cassandra-extension/commit/78ede2580310ef0fb04b9af09fad02594792424d))
+* update to KC 26.6.3 and update tests accordingly ([a8b2f37](https://github.com/ba-itsys/keycloak-cassandra-extension/commit/a8b2f371df6ac8ed304c3b712ac0c9941f2adf60))
+
+
+### Dependencies
+
+* **deps-dev:** bump com.diffplug.spotless:spotless-maven-plugin ([766008d](https://github.com/ba-itsys/keycloak-cassandra-extension/commit/766008d1fd0bbd44c144dbf1b076394cbd368bb4))
+* **deps:** bump cassandra-java-driver.version from 4.19.2 to 4.19.3 ([2e62673](https://github.com/ba-itsys/keycloak-cassandra-extension/commit/2e6267342ce7e363714e46d81d24334410726962))
+* **deps:** bump org.jacoco:jacoco-maven-plugin from 0.8.14 to 0.8.15 ([06a0c16](https://github.com/ba-itsys/keycloak-cassandra-extension/commit/06a0c164a8e815ed2e7a63d117581550b5c4070d))
+
 ## [5.7.1](https://github.com/ba-itsys/keycloak-cassandra-extension/compare/v5.7.0...v5.7.1) (2026-06-15)
 
 
