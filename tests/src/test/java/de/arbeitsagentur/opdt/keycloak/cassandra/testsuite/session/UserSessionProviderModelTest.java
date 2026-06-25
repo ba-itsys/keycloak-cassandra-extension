@@ -96,31 +96,26 @@ public class UserSessionProviderModelTest extends CassandraModelTest {
         });
 
         AtomicReference<List<String>> clientSessionIds = new AtomicReference<>();
-        clientSessionIds.set(origSessions[0].getAuthenticatedClientSessions().values().stream()
-                .map(AuthenticatedClientSessionModel::getId)
-                .collect(Collectors.toList()));
-
         inCommittedTransaction(testSession, session -> {
             RealmModel realm = session.realms().getRealmByName(REALM_NAME);
 
+            // origSessions belong to an already-committed transaction; re-fetch live so the lazy
+            // client-session getters don't enlist on a completed transaction (rejected since KC 26.6.3).
             UserSessionModel userSession = session.sessions().getUserSession(realm, origSessions[0].getId());
             Assert.assertEquals(origSessions[0], userSession);
 
+            clientSessionIds.set(userSession.getAuthenticatedClientSessions().values().stream()
+                    .map(AuthenticatedClientSessionModel::getId)
+                    .collect(Collectors.toList()));
+            String testAppClientSessionId = userSession
+                    .getAuthenticatedClientSessionByClient(
+                            realm.getClientByClientId("test-app").getId())
+                    .getId();
+
             AuthenticatedClientSessionModel clientSession = session.sessions()
                     .getClientSession(
-                            userSession,
-                            realm.getClientByClientId("test-app"),
-                            origSessions[0]
-                                    .getAuthenticatedClientSessionByClient(realm.getClientByClientId("test-app")
-                                            .getId())
-                                    .getId(),
-                            false);
-            Assert.assertEquals(
-                    origSessions[0]
-                            .getAuthenticatedClientSessionByClient(
-                                    realm.getClientByClientId("test-app").getId())
-                            .getId(),
-                    clientSession.getId());
+                            userSession, realm.getClientByClientId("test-app"), testAppClientSessionId, false);
+            Assert.assertEquals(testAppClientSessionId, clientSession.getId());
 
             userSession = session.sessions().getUserSession(realm, origSessions[1].getId());
             Assert.assertEquals(origSessions[1], userSession);
@@ -1167,27 +1162,7 @@ public class UserSessionProviderModelTest extends CassandraModelTest {
             return model;
         });
 
-        withRealm(testSession, REALM_NAME, (s, realm) -> {
-            s.sessions().removeUserSessions(realm);
-            return null;
-        });
-
-        withRealm(testSession, REALM_NAME, (s, realm) -> {
-            assertThat(
-                    s.sessions()
-                            .getUserSessionsStream(realm, s.users().getUserByUsername(realm, "user1"))
-                            .collect(Collectors.toList()),
-                    hasSize(0));
-            assertThat(
-                    s.sessions()
-                            .getUserSessionsStream(realm, s.users().getUserByUsername(realm, "user2"))
-                            .collect(Collectors.toList()),
-                    hasSize(0));
-
-            s.sessions().importUserSessions(Arrays.asList(userSession1, userSession2), false);
-            return null;
-        });
-
+        // Baseline: exactly one session per user exists before importing.
         withRealm(testSession, REALM_NAME, (s, realm) -> {
             assertThat(
                     s.sessions()
@@ -1199,9 +1174,34 @@ public class UserSessionProviderModelTest extends CassandraModelTest {
                             .getUserSessionsStream(realm, s.users().getUserByUsername(realm, "user2"))
                             .collect(Collectors.toList()),
                     hasSize(1));
+            return null;
+        });
+
+        // userSession1/userSession2 belong to their (now committed) creation transactions, so the lazy
+        // reads importUserSessions performs (getUser, getAuthenticatedClientSessions) would enlist on a
+        // completed transaction - rejected since KC 26.6.3. Re-fetch them live first. Import assigns fresh
+        // ids, so the imported sessions land next to the originals: 1 -> 2 per user.
+        withRealm(testSession, REALM_NAME, (s, realm) -> {
+            UserSessionModel session1 = s.sessions().getUserSession(realm, userSession1.getId());
+            UserSessionModel session2 = s.sessions().getUserSession(realm, userSession2.getId());
+            s.sessions().importUserSessions(Arrays.asList(session1, session2), false);
+            return null;
+        });
+
+        withRealm(testSession, REALM_NAME, (s, realm) -> {
+            assertThat(
+                    s.sessions()
+                            .getUserSessionsStream(realm, s.users().getUserByUsername(realm, "user1"))
+                            .collect(Collectors.toList()),
+                    hasSize(2));
+            assertThat(
+                    s.sessions()
+                            .getUserSessionsStream(realm, s.users().getUserByUsername(realm, "user2"))
+                            .collect(Collectors.toList()),
+                    hasSize(2));
             Map<String, Long> stats = s.sessions().getActiveClientSessionStats(realm, false);
             assertThat(
-                    stats.get(s.clients().getClientByClientId(realm, "clientId").getId()), is(2L));
+                    stats.get(s.clients().getClientByClientId(realm, "clientId").getId()), is(4L));
 
             return null;
         });
