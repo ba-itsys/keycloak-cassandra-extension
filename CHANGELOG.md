@@ -1,5 +1,13 @@
 # Changelog
 
+## [5.7.3](https://github.com/ba-itsys/keycloak-cassandra-extension/compare/v5.7.2...v5.7.3) (2026-07-02)
+
+
+### Dependencies
+
+* **deps:** bump keycloak.version from 26.6.3 to 26.6.4 ([93fd163](https://github.com/ba-itsys/keycloak-cassandra-extension/commit/93fd163d8e839162758276351e0d8c132e43455e))
+* **deps:** bump org.sonatype.central:central-publishing-maven-plugin ([c37864d](https://github.com/ba-itsys/keycloak-cassandra-extension/commit/c37864db21cd827887be8f44e9ceac3e0d72474c))
+
 ## [5.7.2](https://github.com/ba-itsys/keycloak-cassandra-extension/compare/v5.7.1...v5.7.2) (2026-06-25)
 
 
