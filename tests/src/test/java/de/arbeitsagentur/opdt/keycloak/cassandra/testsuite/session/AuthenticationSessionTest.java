@@ -44,8 +44,8 @@ import org.keycloak.testframework.annotations.InjectRealm;
 import org.keycloak.testframework.annotations.KeycloakIntegrationTest;
 import org.keycloak.testframework.injection.LifeCycle;
 import org.keycloak.testframework.realm.ManagedRealm;
+import org.keycloak.testframework.realm.RealmBuilder;
 import org.keycloak.testframework.realm.RealmConfig;
-import org.keycloak.testframework.realm.RealmConfigBuilder;
 import org.keycloak.testframework.remote.annotations.TestOnServer;
 
 @KeycloakIntegrationTest(config = CassandraTransientUsersKeycloakServerConfig.class)
@@ -560,7 +560,7 @@ public class AuthenticationSessionTest extends CassandraModelTest {
 
     public static class AuthenticationSessionRealmConfig implements RealmConfig {
         @Override
-        public RealmConfigBuilder configure(RealmConfigBuilder realm) {
+        public RealmBuilder configure(RealmBuilder realm) {
             realm.update(rep -> rep.setAccessCodeLifespanLogin(1800));
             return configureSessionClients(realm);
         }

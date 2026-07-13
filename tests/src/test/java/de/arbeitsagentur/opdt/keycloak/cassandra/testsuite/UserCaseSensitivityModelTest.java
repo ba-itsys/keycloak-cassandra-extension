@@ -16,8 +16,8 @@ import org.keycloak.testframework.annotations.InjectRealm;
 import org.keycloak.testframework.annotations.KeycloakIntegrationTest;
 import org.keycloak.testframework.injection.LifeCycle;
 import org.keycloak.testframework.realm.ManagedRealm;
+import org.keycloak.testframework.realm.RealmBuilder;
 import org.keycloak.testframework.realm.RealmConfig;
-import org.keycloak.testframework.realm.RealmConfigBuilder;
 import org.keycloak.testframework.remote.annotations.TestOnServer;
 
 @KeycloakIntegrationTest(config = CassandraKeycloakServerConfig.class)
@@ -84,7 +84,7 @@ public class UserCaseSensitivityModelTest extends CassandraModelTest {
         private static final String REALM_NAME = "case-sensitive-users";
 
         @Override
-        public RealmConfigBuilder configure(RealmConfigBuilder realm) {
+        public RealmBuilder configure(RealmBuilder realm) {
             realm.attribute(REALM_ATTR_USERNAME_CASE_SENSITIVE, "true");
 
             return realm.name(REALM_NAME);
@@ -95,7 +95,7 @@ public class UserCaseSensitivityModelTest extends CassandraModelTest {
         private static final String REALM_NAME = "case-insensitive-users";
 
         @Override
-        public RealmConfigBuilder configure(RealmConfigBuilder realm) {
+        public RealmBuilder configure(RealmBuilder realm) {
             realm.attribute(REALM_ATTR_USERNAME_CASE_SENSITIVE, "false");
 
             return realm.name(REALM_NAME);

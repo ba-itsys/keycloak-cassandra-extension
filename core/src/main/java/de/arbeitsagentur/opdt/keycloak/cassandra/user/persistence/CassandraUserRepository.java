@@ -400,4 +400,88 @@ public class CassandraUserRepository extends TransactionalRepository<User, UserD
     public List<UserConsent> findUserConsentsByRealmId(String realmId) {
         return dao.findUserConsentsByRealmId(realmId).all();
     }
+
+    @Override
+    public void insertOrUpdateVerifiableCredential(UserVerifiableCredential verifiableCredential) {
+        dao.insertOrUpdate(verifiableCredential);
+        dao.insertOrUpdate(new UserVerifiableCredentialById(
+                verifiableCredential.getId(),
+                verifiableCredential.getUserId(),
+                verifiableCredential.getClientScopeId()));
+    }
+
+    @Override
+    public UserVerifiableCredential findVerifiableCredential(String userId, String clientScopeId) {
+        return dao.findVerifiableCredential(userId, clientScopeId);
+    }
+
+    @Override
+    public UserVerifiableCredential findVerifiableCredentialById(String id) {
+        UserVerifiableCredentialById pointer = dao.findVerifiableCredentialPointer(id);
+        if (pointer == null) {
+            return null;
+        }
+        return dao.findVerifiableCredential(pointer.getUserId(), pointer.getClientScopeId());
+    }
+
+    @Override
+    public List<UserVerifiableCredential> findVerifiableCredentialsByUser(String userId) {
+        return dao.findVerifiableCredentialsByUser(userId).all();
+    }
+
+    @Override
+    public boolean deleteVerifiableCredential(String userId, String clientScopeId, String id) {
+        boolean deleted = dao.deleteVerifiableCredential(userId, clientScopeId);
+        if (id != null) {
+            dao.deleteVerifiableCredentialPointer(id);
+        }
+        return deleted;
+    }
+
+    @Override
+    public void insertOrUpdateIssuedVerifiableCredential(
+            IssuedVerifiableCredential issuedVerifiableCredential, Integer ttl) {
+        IssuedVerifiableCredentialById pointer = new IssuedVerifiableCredentialById(
+                issuedVerifiableCredential.getId(), issuedVerifiableCredential.getUserId());
+        if (ttl != null && ttl > 0) {
+            dao.insertOrUpdate(issuedVerifiableCredential, ttl);
+            dao.insertOrUpdate(pointer, ttl);
+        } else {
+            dao.insertOrUpdate(issuedVerifiableCredential);
+            dao.insertOrUpdate(pointer);
+        }
+    }
+
+    @Override
+    public List<IssuedVerifiableCredential> findIssuedVerifiableCredentialsByUser(String userId) {
+        return dao.findIssuedVerifiableCredentialsByUser(userId).all();
+    }
+
+    @Override
+    public boolean deleteIssuedVerifiableCredentialById(String id) {
+        IssuedVerifiableCredentialById pointer = dao.findIssuedVerifiableCredentialPointer(id);
+        if (pointer == null) {
+            return false;
+        }
+        return deleteIssuedVerifiableCredential(pointer.getUserId(), id);
+    }
+
+    @Override
+    public boolean deleteIssuedVerifiableCredential(String userId, String id) {
+        boolean deleted = dao.deleteIssuedVerifiableCredential(userId, id);
+        dao.deleteIssuedVerifiableCredentialPointer(id);
+        return deleted;
+    }
+
+    @Override
+    public void deleteAllVerifiableCredentialsByUser(String userId) {
+        for (UserVerifiableCredential vc : dao.findVerifiableCredentialsByUser(userId)) {
+            dao.deleteVerifiableCredentialPointer(vc.getId());
+        }
+        dao.deleteVerifiableCredentialsByUser(userId);
+        for (IssuedVerifiableCredential issued : dao.findIssuedVerifiableCredentialsByUser(userId)) {
+            dao.deleteIssuedVerifiableCredentialPointer(issued.getId());
+        }
+        dao.deleteIssuedVerifiableCredentialsByUser(userId);
+    }
 }

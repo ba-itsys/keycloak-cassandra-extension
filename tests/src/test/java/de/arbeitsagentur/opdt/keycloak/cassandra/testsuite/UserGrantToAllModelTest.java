@@ -12,8 +12,8 @@ import org.keycloak.testframework.annotations.InjectRealm;
 import org.keycloak.testframework.annotations.KeycloakIntegrationTest;
 import org.keycloak.testframework.injection.LifeCycle;
 import org.keycloak.testframework.realm.ManagedRealm;
+import org.keycloak.testframework.realm.RealmBuilder;
 import org.keycloak.testframework.realm.RealmConfig;
-import org.keycloak.testframework.realm.RealmConfigBuilder;
 import org.keycloak.testframework.remote.annotations.TestOnServer;
 
 @KeycloakIntegrationTest(config = CassandraKeycloakServerConfig.class)
@@ -84,7 +84,7 @@ public class UserGrantToAllModelTest extends CassandraModelTest {
         private static final String REALM_NAME = "grant-to-all-realm-1";
 
         @Override
-        public RealmConfigBuilder configure(RealmConfigBuilder realm) {
+        public RealmBuilder configure(RealmBuilder realm) {
             return realm.name(REALM_NAME);
         }
     }
@@ -93,7 +93,7 @@ public class UserGrantToAllModelTest extends CassandraModelTest {
         private static final String REALM_NAME = "grant-to-all-realm-2";
 
         @Override
-        public RealmConfigBuilder configure(RealmConfigBuilder realm) {
+        public RealmBuilder configure(RealmBuilder realm) {
             return realm.name(REALM_NAME);
         }
     }

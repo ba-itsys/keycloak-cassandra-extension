@@ -29,9 +29,11 @@ import org.keycloak.representations.idm.ClientScopeRepresentation;
 import org.keycloak.testframework.annotations.InjectRealm;
 import org.keycloak.testframework.annotations.KeycloakIntegrationTest;
 import org.keycloak.testframework.injection.LifeCycle;
+import org.keycloak.testframework.realm.ClientBuilder;
 import org.keycloak.testframework.realm.ManagedRealm;
+import org.keycloak.testframework.realm.RealmBuilder;
 import org.keycloak.testframework.realm.RealmConfig;
-import org.keycloak.testframework.realm.RealmConfigBuilder;
+import org.keycloak.testframework.realm.UserBuilder;
 import org.keycloak.testframework.remote.annotations.TestOnServer;
 
 /**
@@ -311,14 +313,14 @@ public class UserConsentModelTest extends CassandraModelTest {
 
     public static class UserConsentRealmConfig implements RealmConfig {
         @Override
-        public RealmConfigBuilder configure(RealmConfigBuilder realm) {
-            realm.addClient("foo-client");
-            realm.addClient("bar-client");
-            realm.addClient("hardcoded-client");
-            realm.addUser("john");
-            realm.addUser("mary");
-            realm.addClientScope(clientScope("foo"));
-            realm.addClientScope(clientScope("bar"));
+        public RealmBuilder configure(RealmBuilder realm) {
+            realm.clients(
+                    ClientBuilder.create("foo-client"),
+                    ClientBuilder.create("bar-client"),
+                    ClientBuilder.create("hardcoded-client"));
+            realm.users(
+                    UserBuilder.create().username("john"), UserBuilder.create().username("mary"));
+            realm.clientScopes(clientScope("foo"), clientScope("bar"));
             return realm;
         }
 

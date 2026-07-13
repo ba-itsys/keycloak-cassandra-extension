@@ -14,8 +14,9 @@ import org.keycloak.testframework.annotations.InjectRealm;
 import org.keycloak.testframework.annotations.KeycloakIntegrationTest;
 import org.keycloak.testframework.injection.LifeCycle;
 import org.keycloak.testframework.realm.ManagedRealm;
+import org.keycloak.testframework.realm.RealmBuilder;
 import org.keycloak.testframework.realm.RealmConfig;
-import org.keycloak.testframework.realm.RealmConfigBuilder;
+import org.keycloak.testframework.realm.UserBuilder;
 import org.keycloak.testframework.remote.annotations.TestOnServer;
 
 /**
@@ -153,8 +154,8 @@ public class CredentialModelTest extends CassandraModelTest {
 
     public static class CredentialRealmConfig implements RealmConfig {
         @Override
-        public RealmConfigBuilder configure(RealmConfigBuilder realm) {
-            realm.addUser("test-user@localhost").password("password");
+        public RealmBuilder configure(RealmBuilder realm) {
+            realm.users(UserBuilder.create().username("test-user@localhost").password("password"));
             return realm;
         }
     }

@@ -22,8 +22,11 @@ import de.arbeitsagentur.opdt.keycloak.cassandra.AttributeTypes;
 import de.arbeitsagentur.opdt.keycloak.cassandra.transaction.TransactionalProvider;
 import de.arbeitsagentur.opdt.keycloak.cassandra.user.persistence.UserRepository;
 import de.arbeitsagentur.opdt.keycloak.cassandra.user.persistence.entities.FederatedIdentity;
+import de.arbeitsagentur.opdt.keycloak.cassandra.user.persistence.entities.IssuedVerifiableCredential;
 import de.arbeitsagentur.opdt.keycloak.cassandra.user.persistence.entities.User;
 import de.arbeitsagentur.opdt.keycloak.cassandra.user.persistence.entities.UserConsent;
+import de.arbeitsagentur.opdt.keycloak.cassandra.user.persistence.entities.UserVerifiableCredential;
+import de.arbeitsagentur.opdt.keycloak.common.TimeAdapter;
 import java.time.Instant;
 import java.util.*;
 import java.util.function.BiFunction;
@@ -33,9 +36,14 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import lombok.extern.jbosslog.JBossLog;
 import org.keycloak.common.constants.ServiceAccountConstants;
+import org.keycloak.common.util.SecretGenerator;
+import org.keycloak.common.util.Time;
 import org.keycloak.component.ComponentModel;
 import org.keycloak.models.*;
 import org.keycloak.models.utils.KeycloakModelUtils;
+import org.keycloak.userprofile.UserProfile;
+import org.keycloak.userprofile.UserProfileContext;
+import org.keycloak.userprofile.UserProfileProvider;
 import org.keycloak.utils.StringUtil;
 
 @JBossLog
@@ -615,6 +623,7 @@ public class CassandraUserProvider extends TransactionalProvider<User, Cassandra
     public boolean removeUser(RealmModel realm, UserModel user) {
         userRepository.deleteUserConsentsByUserId(realm.getId(), user.getId());
         userRepository.deleteFederatedIdentitiesByUserId(user.getId());
+        userRepository.deleteAllVerifiableCredentialsByUser(user.getId());
         models.remove(user.getId());
         return ((CassandraUserAdapter) user).delete();
     }
@@ -688,6 +697,182 @@ public class CassandraUserProvider extends TransactionalProvider<User, Cassandra
     @Override
     public void preRemove(RealmModel realm, ComponentModel component) {
         // NOOP
+    }
+
+    @Override
+    public UserVerifiableCredentialModel addVerifiableCredential(String userId, UserVerifiableCredentialModel model) {
+        log.tracef("addVerifiableCredential(%s, %s)%s", userId, model.getClientScopeId(), getShortStackTrace());
+        if (model.getClientScopeId() == null) {
+            throw new ModelException("Credential scope not specified");
+        }
+        if (userRepository.findVerifiableCredential(userId, model.getClientScopeId()) != null) {
+            throw new ModelException("A verifiable credential already exists for user " + userId + " and client scope "
+                    + model.getClientScopeId());
+        }
+
+        long now = Time.currentTimeMillis();
+        Long createdDate = model.getCreatedDate() != null ? model.getCreatedDate() : now;
+        Long updatedDate = model.getUpdatedDate() != null ? model.getUpdatedDate() : createdDate;
+        String revision = model.getRevision() != null
+                ? model.getRevision()
+                : SecretGenerator.getInstance().generateSecureID();
+        Map<String, List<String>> attributes =
+                model.getUserAttributes() != null ? model.getUserAttributes() : readUserProfileAttributes(userId);
+
+        UserVerifiableCredential entity = UserVerifiableCredential.builder()
+                .userId(userId)
+                .clientScopeId(model.getClientScopeId())
+                .id(KeycloakModelUtils.generateId())
+                .revision(revision)
+                .userAttributes(attributes)
+                .createdDate(createdDate)
+                .updatedDate(updatedDate)
+                .build();
+        userRepository.insertOrUpdateVerifiableCredential(entity);
+        return toModel(entity);
+    }
+
+    @Override
+    public boolean removeVerifiableCredential(String userId, String clientScopeId) {
+        log.tracef("removeVerifiableCredential(%s, %s)%s", userId, clientScopeId, getShortStackTrace());
+        UserVerifiableCredential existing = userRepository.findVerifiableCredential(userId, clientScopeId);
+        if (existing == null) {
+            return false;
+        }
+        userRepository.findIssuedVerifiableCredentialsByUser(userId).stream()
+                .filter(issued -> Objects.equals(issued.getVerifiableCredentialId(), existing.getId()))
+                .forEach(issued -> userRepository.deleteIssuedVerifiableCredential(userId, issued.getId()));
+        return userRepository.deleteVerifiableCredential(userId, clientScopeId, existing.getId());
+    }
+
+    @Override
+    public Stream<UserVerifiableCredentialModel> getVerifiableCredentialsByUser(String userId) {
+        log.tracef("getVerifiableCredentialsByUser(%s)%s", userId, getShortStackTrace());
+        return userRepository.findVerifiableCredentialsByUser(userId).stream()
+                .map(this::toModel)
+                .sorted(Comparator.comparing(
+                        UserVerifiableCredentialModel::getClientScopeId,
+                        Comparator.nullsLast(Comparator.naturalOrder())));
+    }
+
+    @Override
+    public UserVerifiableCredentialModel getVerifiableCredentialById(String id) {
+        log.tracef("getVerifiableCredentialById(%s)%s", id, getShortStackTrace());
+        UserVerifiableCredential entity = userRepository.findVerifiableCredentialById(id);
+        return entity == null ? null : toModel(entity);
+    }
+
+    @Override
+    public UserVerifiableCredentialModel getVerifiableCredentialByClientScope(String userId, String clientScopeId) {
+        log.tracef("getVerifiableCredentialByClientScope(%s, %s)%s", userId, clientScopeId, getShortStackTrace());
+        UserVerifiableCredential entity = userRepository.findVerifiableCredential(userId, clientScopeId);
+        return entity == null ? null : toModel(entity);
+    }
+
+    @Override
+    public UserVerifiableCredentialModel updateVerifiableCredential(String userId, String clientScopeId) {
+        log.tracef("updateVerifiableCredential(%s, %s)%s", userId, clientScopeId, getShortStackTrace());
+        RealmModel realm = session.getContext().getRealm();
+        UserModel user = realm == null ? null : getUserById(realm, userId);
+        if (user == null) {
+            throw new ModelException("User not found: " + userId);
+        }
+        UserVerifiableCredential existing = userRepository.findVerifiableCredential(userId, clientScopeId);
+        if (existing == null) {
+            throw new ModelException("Verifiable credential not found for client scope: " + clientScopeId);
+        }
+        existing.setUserAttributes(readUserProfileAttributes(userId));
+        existing.setRevision(SecretGenerator.getInstance().generateSecureID());
+        existing.setUpdatedDate(Time.currentTimeMillis());
+        userRepository.insertOrUpdateVerifiableCredential(existing);
+        return toModel(existing);
+    }
+
+    @Override
+    public IssuedVerifiableCredentialModel addIssuedVerifiableCredential(IssuedVerifiableCredentialModel model) {
+        log.tracef("addIssuedVerifiableCredential(%s)%s", model.getUserId(), getShortStackTrace());
+        String revision = model.getRevision();
+        if (revision == null) {
+            UserVerifiableCredential parent =
+                    userRepository.findVerifiableCredentialById(model.getVerifiableCredentialId());
+            if (parent == null) {
+                throw new ModelException("Verifiable credential not found: " + model.getVerifiableCredentialId());
+            }
+            revision = parent.getRevision();
+        }
+
+        long now = Time.currentTimeMillis();
+        Long issuedAt = model.getIssuedAt() != null ? model.getIssuedAt() : now;
+        Long expiresAt = model.getExpiresAt();
+        String id = SecretGenerator.getInstance().generateSecureID();
+        IssuedVerifiableCredential entity = IssuedVerifiableCredential.builder()
+                .userId(model.getUserId())
+                .id(id)
+                .verifiableCredentialId(model.getVerifiableCredentialId())
+                .issuedAt(issuedAt)
+                .expiresAt(expiresAt)
+                .clientId(model.getClientId())
+                .revision(revision)
+                .build();
+        Integer ttl = expiresAt != null ? TimeAdapter.toClampedTtl((expiresAt - now) / 1000L) : null;
+        userRepository.insertOrUpdateIssuedVerifiableCredential(entity, ttl);
+        model.setId(id);
+        model.setIssuedAt(issuedAt);
+        model.setRevision(revision);
+        return model;
+    }
+
+    @Override
+    public Stream<IssuedVerifiableCredentialModel> getIssuedVerifiableCredentialsStreamByUser(String userId) {
+        log.tracef("getIssuedVerifiableCredentialsStreamByUser(%s)%s", userId, getShortStackTrace());
+        return userRepository.findIssuedVerifiableCredentialsByUser(userId).stream()
+                .map(this::toModel)
+                .sorted(Comparator.comparing(
+                        IssuedVerifiableCredentialModel::getIssuedAt, Comparator.nullsLast(Comparator.reverseOrder())));
+    }
+
+    @Override
+    public boolean removeIssuedVerifiableCredential(String id) {
+        log.tracef("removeIssuedVerifiableCredential(%s)%s", id, getShortStackTrace());
+        return userRepository.deleteIssuedVerifiableCredentialById(id);
+    }
+
+    @Override
+    public void removeExpiredIssuedVerifiableCredentials() {
+        // Expiry is handled by Cassandra TTL, so there is nothing to sweep.
+    }
+
+    private UserVerifiableCredentialModel toModel(UserVerifiableCredential entity) {
+        UserVerifiableCredentialModel model =
+                new UserVerifiableCredentialModel(entity.getId(), entity.getClientScopeId());
+        model.setRevision(entity.getRevision());
+        model.setCreatedDate(entity.getCreatedDate());
+        model.setUpdatedDate(entity.getUpdatedDate());
+        model.setUserAttributes(entity.getUserAttributes());
+        return model;
+    }
+
+    private IssuedVerifiableCredentialModel toModel(IssuedVerifiableCredential entity) {
+        IssuedVerifiableCredentialModel model = new IssuedVerifiableCredentialModel();
+        model.setId(entity.getId());
+        model.setUserId(entity.getUserId());
+        model.setVerifiableCredentialId(entity.getVerifiableCredentialId());
+        model.setIssuedAt(entity.getIssuedAt());
+        model.setExpiresAt(entity.getExpiresAt());
+        model.setClientId(entity.getClientId());
+        model.setRevision(entity.getRevision());
+        return model;
+    }
+
+    private Map<String, List<String>> readUserProfileAttributes(String userId) {
+        RealmModel realm = session.getContext().getRealm();
+        UserModel user = realm == null ? null : getUserById(realm, userId);
+        if (user == null) {
+            return new HashMap<>();
+        }
+        UserProfileProvider provider = session.getProvider(UserProfileProvider.class);
+        UserProfile profile = provider.create(UserProfileContext.USER_API, user);
+        return new HashMap<>(profile.getAttributes().getReadable());
     }
 
     @Override

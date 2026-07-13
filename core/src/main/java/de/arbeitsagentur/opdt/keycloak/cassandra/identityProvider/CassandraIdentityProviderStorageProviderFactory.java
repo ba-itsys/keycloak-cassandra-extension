@@ -1,8 +1,9 @@
 package de.arbeitsagentur.opdt.keycloak.cassandra.identityProvider;
 
-import static de.arbeitsagentur.opdt.keycloak.common.CommunityProfiles.isCassandraProfileEnabled;
+import static de.arbeitsagentur.opdt.keycloak.cassandra.CassandraStoreConfig.isAreaEnabled;
 
 import com.google.auto.service.AutoService;
+import de.arbeitsagentur.opdt.keycloak.cassandra.CassandraStoreConfig.Area;
 import org.keycloak.Config;
 import org.keycloak.models.*;
 import org.keycloak.provider.EnvironmentDependentProviderFactory;
@@ -13,7 +14,7 @@ public class CassandraIdentityProviderStorageProviderFactory
                 EnvironmentDependentProviderFactory {
     @Override
     public boolean isSupported(Config.Scope scope) {
-        return isCassandraProfileEnabled();
+        return isAreaEnabled(Area.IDENTITY_PROVIDER);
     }
 
     @Override

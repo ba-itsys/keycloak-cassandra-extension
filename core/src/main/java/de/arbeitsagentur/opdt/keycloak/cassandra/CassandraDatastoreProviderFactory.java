@@ -15,11 +15,8 @@
  */
 package de.arbeitsagentur.opdt.keycloak.cassandra;
 
-import static de.arbeitsagentur.opdt.keycloak.common.CommunityProfiles.isCassandraCacheProfileEnabled;
-import static de.arbeitsagentur.opdt.keycloak.common.CommunityProfiles.isCassandraProfileEnabled;
 import static de.arbeitsagentur.opdt.keycloak.common.MapProviderObjectType.*;
 import static de.arbeitsagentur.opdt.keycloak.common.ProviderHelpers.createProviderCached;
-import static org.keycloak.userprofile.DeclarativeUserProfileProviderFactory.PROVIDER_PRIORITY;
 
 import com.google.auto.service.AutoService;
 import de.arbeitsagentur.opdt.keycloak.cassandra.client.CassandraClientProvider;
@@ -28,18 +25,21 @@ import de.arbeitsagentur.opdt.keycloak.cassandra.group.CassandraGroupProvider;
 import de.arbeitsagentur.opdt.keycloak.cassandra.role.CassandraRoleProvider;
 import lombok.extern.jbosslog.JBossLog;
 import org.keycloak.Config;
+import org.keycloak.common.Profile;
 import org.keycloak.models.*;
-import org.keycloak.provider.EnvironmentDependentProviderFactory;
 import org.keycloak.provider.InvalidationHandler;
 import org.keycloak.storage.DatastoreProvider;
 import org.keycloak.storage.DatastoreProviderFactory;
 
+/**
+ * The Cassandra datastore, selected with {@code --spi-datastore--provider=cassandra}. Which storage
+ * areas it serves is controlled by {@link CassandraStoreConfig} ({@code
+ * --spi-datastore--cassandra--areas}); the per-area provider factories gate themselves on that.
+ */
 @JBossLog
 @AutoService(DatastoreProviderFactory.class)
-public class CassandraDatastoreProviderFactory
-        implements DatastoreProviderFactory, InvalidationHandler, EnvironmentDependentProviderFactory {
-    private static final String PROVIDER_ID =
-            "legacy"; // Override legacy provider to disable timers / event listeners and stuff...
+public class CassandraDatastoreProviderFactory implements DatastoreProviderFactory, InvalidationHandler {
+    private static final String PROVIDER_ID = CassandraStoreConfig.DATASTORE_PROVIDER_ID;
 
     @Override
     public String getId() {
@@ -53,11 +53,18 @@ public class CassandraDatastoreProviderFactory
 
     @Override
     public void init(Config.Scope scope) {
+        // Re-read per boot: embedded test runs reuse the JVM across servers with different options.
+        CassandraStoreConfig.reset();
         log.info("Using cassandra datastore...");
     }
 
     @Override
-    public void postInit(KeycloakSessionFactory keycloakSessionFactory) {}
+    public void postInit(KeycloakSessionFactory keycloakSessionFactory) {
+        if (!Profile.isFeatureEnabled(Profile.Feature.STATELESS)) {
+            throw new IllegalStateException(
+                    "The cassandra datastore requires the 'stateless' feature. Start Keycloak with --features=stateless.");
+        }
+    }
 
     @Override
     public void close() {}
@@ -122,15 +129,5 @@ public class CassandraDatastoreProviderFactory
                 }
             });
         }
-    }
-
-    @Override
-    public int order() {
-        return PROVIDER_PRIORITY + 1;
-    }
-
-    @Override
-    public boolean isSupported(Config.Scope config) {
-        return isCassandraProfileEnabled() || isCassandraCacheProfileEnabled();
     }
 }

@@ -16,8 +16,10 @@
 package de.arbeitsagentur.opdt.keycloak.cassandra.user.persistence;
 
 import de.arbeitsagentur.opdt.keycloak.cassandra.user.persistence.entities.FederatedIdentity;
+import de.arbeitsagentur.opdt.keycloak.cassandra.user.persistence.entities.IssuedVerifiableCredential;
 import de.arbeitsagentur.opdt.keycloak.cassandra.user.persistence.entities.User;
 import de.arbeitsagentur.opdt.keycloak.cassandra.user.persistence.entities.UserConsent;
+import de.arbeitsagentur.opdt.keycloak.cassandra.user.persistence.entities.UserVerifiableCredential;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Stream;
@@ -82,4 +84,24 @@ public interface UserRepository {
     List<UserConsent> findUserConsentsByUserId(String realmId, String userId);
 
     List<UserConsent> findUserConsentsByRealmId(String realmId);
+
+    void insertOrUpdateVerifiableCredential(UserVerifiableCredential verifiableCredential);
+
+    UserVerifiableCredential findVerifiableCredential(String userId, String clientScopeId);
+
+    UserVerifiableCredential findVerifiableCredentialById(String id);
+
+    List<UserVerifiableCredential> findVerifiableCredentialsByUser(String userId);
+
+    boolean deleteVerifiableCredential(String userId, String clientScopeId, String id);
+
+    void insertOrUpdateIssuedVerifiableCredential(IssuedVerifiableCredential issuedVerifiableCredential, Integer ttl);
+
+    List<IssuedVerifiableCredential> findIssuedVerifiableCredentialsByUser(String userId);
+
+    boolean deleteIssuedVerifiableCredentialById(String id);
+
+    boolean deleteIssuedVerifiableCredential(String userId, String id);
+
+    void deleteAllVerifiableCredentialsByUser(String userId);
 }

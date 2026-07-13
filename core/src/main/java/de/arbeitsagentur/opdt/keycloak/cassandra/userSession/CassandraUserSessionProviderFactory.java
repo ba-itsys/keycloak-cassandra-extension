@@ -16,12 +16,12 @@
 
 package de.arbeitsagentur.opdt.keycloak.cassandra.userSession;
 
-import static de.arbeitsagentur.opdt.keycloak.common.CommunityProfiles.isCassandraCacheProfileEnabled;
-import static de.arbeitsagentur.opdt.keycloak.common.CommunityProfiles.isCassandraProfileEnabled;
+import static de.arbeitsagentur.opdt.keycloak.cassandra.CassandraStoreConfig.isAreaEnabled;
 import static de.arbeitsagentur.opdt.keycloak.common.ProviderHelpers.createProviderCached;
 import static org.keycloak.userprofile.DeclarativeUserProfileProviderFactory.PROVIDER_PRIORITY;
 
 import com.google.auto.service.AutoService;
+import de.arbeitsagentur.opdt.keycloak.cassandra.CassandraStoreConfig.Area;
 import de.arbeitsagentur.opdt.keycloak.cassandra.connection.CassandraConnectionProvider;
 import lombok.extern.jbosslog.JBossLog;
 import org.keycloak.Config;
@@ -61,7 +61,7 @@ public class CassandraUserSessionProviderFactory
 
     @Override
     public boolean isSupported(Config.Scope config) {
-        return isCassandraProfileEnabled() || isCassandraCacheProfileEnabled();
+        return isAreaEnabled(Area.USER_SESSION);
     }
 
     @Override

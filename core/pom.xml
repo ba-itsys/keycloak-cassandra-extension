@@ -105,6 +105,7 @@
               <artifactSet>
                 <includes>
                   <include>org.apache.cassandra:*</include>
+                  <include>com.datastax.oss:native-protocol</include>
                   <include>com.typesafe:*</include>
                   <include>org.cognitor.cassandra:cassandra-migration</include>
                 </includes>

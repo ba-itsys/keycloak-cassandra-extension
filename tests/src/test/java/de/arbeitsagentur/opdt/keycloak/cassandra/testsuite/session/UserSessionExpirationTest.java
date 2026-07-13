@@ -33,8 +33,9 @@ import org.keycloak.testframework.annotations.InjectRealm;
 import org.keycloak.testframework.annotations.KeycloakIntegrationTest;
 import org.keycloak.testframework.injection.LifeCycle;
 import org.keycloak.testframework.realm.ManagedRealm;
+import org.keycloak.testframework.realm.RealmBuilder;
 import org.keycloak.testframework.realm.RealmConfig;
-import org.keycloak.testframework.realm.RealmConfigBuilder;
+import org.keycloak.testframework.realm.UserBuilder;
 import org.keycloak.testframework.remote.annotations.TestOnServer;
 
 @KeycloakIntegrationTest(config = CassandraKeycloakServerConfig.class)
@@ -477,9 +478,10 @@ public class UserSessionExpirationTest extends CassandraModelTest {
 
     public static class UserSessionExpirationRealmConfig implements RealmConfig {
         @Override
-        public RealmConfigBuilder configure(RealmConfigBuilder realm) {
-            realm.addUser("user1").email("user1@localhost");
-            realm.addUser("user2").email("user2@localhost");
+        public RealmBuilder configure(RealmBuilder realm) {
+            realm.users(
+                    UserBuilder.create().username("user1").email("user1@localhost"),
+                    UserBuilder.create().username("user2").email("user2@localhost"));
             return realm;
         }
     }

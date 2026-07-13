@@ -38,9 +38,11 @@ import org.keycloak.services.managers.UserSessionManager;
 import org.keycloak.testframework.annotations.InjectRealm;
 import org.keycloak.testframework.annotations.KeycloakIntegrationTest;
 import org.keycloak.testframework.injection.LifeCycle;
+import org.keycloak.testframework.realm.ClientBuilder;
 import org.keycloak.testframework.realm.ManagedRealm;
+import org.keycloak.testframework.realm.RealmBuilder;
 import org.keycloak.testframework.realm.RealmConfig;
-import org.keycloak.testframework.realm.RealmConfigBuilder;
+import org.keycloak.testframework.realm.UserBuilder;
 import org.keycloak.testframework.remote.annotations.TestOnServer;
 
 /**
@@ -218,7 +220,7 @@ public class OfflineSessionPersistenceTest extends CassandraModelTest {
         private static final String REALM_NAME = "offline-session";
 
         @Override
-        public RealmConfigBuilder configure(RealmConfigBuilder realm) {
+        public RealmBuilder configure(RealmBuilder realm) {
             realm.name(REALM_NAME)
                     .ssoSessionMaxLifespan(10 * 60 * 60)
                     .ssoSessionIdleTimeout(60 * 60)
@@ -226,10 +228,10 @@ public class OfflineSessionPersistenceTest extends CassandraModelTest {
                         rep.setOfflineSessionMaxLifespan(365 * 24 * 60 * 60);
                         rep.setOfflineSessionIdleTimeout(30 * 24 * 60 * 60);
                     });
-            realm.addClient(TEST_APP_CLIENT_ID);
-            realm.addClient(THIRD_PARTY_CLIENT_ID);
-            realm.addUser(USER_1).email("user1@localhost");
-            realm.addUser(USER_2).email("user2@localhost");
+            realm.clients(ClientBuilder.create(TEST_APP_CLIENT_ID), ClientBuilder.create(THIRD_PARTY_CLIENT_ID));
+            realm.users(
+                    UserBuilder.create().username(USER_1).email("user1@localhost"),
+                    UserBuilder.create().username(USER_2).email("user2@localhost"));
             return realm;
         }
     }

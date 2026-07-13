@@ -26,6 +26,7 @@ import de.arbeitsagentur.opdt.keycloak.cassandra.client.persistence.ClientReposi
 import de.arbeitsagentur.opdt.keycloak.cassandra.client.persistence.entities.Client;
 import de.arbeitsagentur.opdt.keycloak.cassandra.clientScope.persistence.ClientScopeRepository;
 import de.arbeitsagentur.opdt.keycloak.cassandra.clientScope.persistence.entities.ClientScopes;
+import de.arbeitsagentur.opdt.keycloak.cassandra.deploymentState.persistence.DeploymentStateRepository;
 import de.arbeitsagentur.opdt.keycloak.cassandra.group.persistence.GroupRepository;
 import de.arbeitsagentur.opdt.keycloak.cassandra.group.persistence.entities.Groups;
 import de.arbeitsagentur.opdt.keycloak.cassandra.loginFailure.persistence.LoginFailureRepository;
@@ -39,8 +40,10 @@ import de.arbeitsagentur.opdt.keycloak.cassandra.singleUseObject.persistence.Sin
 import de.arbeitsagentur.opdt.keycloak.cassandra.singleUseObject.persistence.entities.SingleUseObject;
 import de.arbeitsagentur.opdt.keycloak.cassandra.user.persistence.UserRepository;
 import de.arbeitsagentur.opdt.keycloak.cassandra.user.persistence.entities.FederatedIdentity;
+import de.arbeitsagentur.opdt.keycloak.cassandra.user.persistence.entities.IssuedVerifiableCredential;
 import de.arbeitsagentur.opdt.keycloak.cassandra.user.persistence.entities.User;
 import de.arbeitsagentur.opdt.keycloak.cassandra.user.persistence.entities.UserConsent;
+import de.arbeitsagentur.opdt.keycloak.cassandra.user.persistence.entities.UserVerifiableCredential;
 import de.arbeitsagentur.opdt.keycloak.cassandra.userSession.persistence.UserSessionRepository;
 import de.arbeitsagentur.opdt.keycloak.cassandra.userSession.persistence.entities.AuthenticatedClientSessionValue;
 import de.arbeitsagentur.opdt.keycloak.cassandra.userSession.persistence.entities.UserSession;
@@ -69,6 +72,8 @@ public class ManagedCompositeCassandraRepository implements CompositeRepository 
     private LoginFailureRepository loginFailureRepository;
 
     private SingleUseObjectRepository singleUseObjectRepository;
+
+    private DeploymentStateRepository deploymentStateRepository;
 
     private ClientRepository clientRepository;
 
@@ -234,6 +239,63 @@ public class ManagedCompositeCassandraRepository implements CompositeRepository 
     @L1Cached(cacheName = USER_CONSENT_CACHE)
     public List<UserConsent> findUserConsentsByRealmId(String realmId) {
         return this.userRepository.findUserConsentsByRealmId(realmId);
+    }
+
+    @L1Cached(cacheName = USER_CACHE)
+    @InvalidateCache
+    public void insertOrUpdateVerifiableCredential(UserVerifiableCredential verifiableCredential) {
+        this.userRepository.insertOrUpdateVerifiableCredential(verifiableCredential);
+    }
+
+    @L1Cached(cacheName = USER_CACHE)
+    public UserVerifiableCredential findVerifiableCredential(String userId, String clientScopeId) {
+        return this.userRepository.findVerifiableCredential(userId, clientScopeId);
+    }
+
+    @L1Cached(cacheName = USER_CACHE)
+    public UserVerifiableCredential findVerifiableCredentialById(String id) {
+        return this.userRepository.findVerifiableCredentialById(id);
+    }
+
+    @L1Cached(cacheName = USER_CACHE)
+    public List<UserVerifiableCredential> findVerifiableCredentialsByUser(String userId) {
+        return this.userRepository.findVerifiableCredentialsByUser(userId);
+    }
+
+    @L1Cached(cacheName = USER_CACHE)
+    @InvalidateCache
+    public boolean deleteVerifiableCredential(String userId, String clientScopeId, String id) {
+        return this.userRepository.deleteVerifiableCredential(userId, clientScopeId, id);
+    }
+
+    @L1Cached(cacheName = USER_CACHE)
+    @InvalidateCache
+    public void insertOrUpdateIssuedVerifiableCredential(
+            IssuedVerifiableCredential issuedVerifiableCredential, Integer ttl) {
+        this.userRepository.insertOrUpdateIssuedVerifiableCredential(issuedVerifiableCredential, ttl);
+    }
+
+    @L1Cached(cacheName = USER_CACHE)
+    public List<IssuedVerifiableCredential> findIssuedVerifiableCredentialsByUser(String userId) {
+        return this.userRepository.findIssuedVerifiableCredentialsByUser(userId);
+    }
+
+    @L1Cached(cacheName = USER_CACHE)
+    @InvalidateCache
+    public boolean deleteIssuedVerifiableCredentialById(String id) {
+        return this.userRepository.deleteIssuedVerifiableCredentialById(id);
+    }
+
+    @L1Cached(cacheName = USER_CACHE)
+    @InvalidateCache
+    public boolean deleteIssuedVerifiableCredential(String userId, String id) {
+        return this.userRepository.deleteIssuedVerifiableCredential(userId, id);
+    }
+
+    @L1Cached(cacheName = USER_CACHE)
+    @InvalidateCache
+    public void deleteAllVerifiableCredentialsByUser(String userId) {
+        this.userRepository.deleteAllVerifiableCredentialsByUser(userId);
     }
 
     @L1Cached(cacheName = USER_CACHE)
@@ -510,6 +572,10 @@ public class ManagedCompositeCassandraRepository implements CompositeRepository 
     @InvalidateCache
     public boolean deleteSingleUseObjectByKey(String key) {
         return this.singleUseObjectRepository.deleteSingleUseObjectByKey(key);
+    }
+
+    public String getOrCreateResourcesVersionSeed(String id) {
+        return this.deploymentStateRepository.getOrCreateResourcesVersionSeed(id);
     }
 
     @L1Cached(cacheName = CLIENT_CACHE)
