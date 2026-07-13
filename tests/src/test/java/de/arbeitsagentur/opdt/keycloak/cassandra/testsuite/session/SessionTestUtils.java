@@ -24,22 +24,26 @@ import org.junit.Assert;
 import org.keycloak.models.*;
 import org.keycloak.models.light.LightweightUserAdapter;
 import org.keycloak.protocol.oidc.OIDCLoginProtocol;
-import org.keycloak.testframework.realm.RealmConfigBuilder;
+import org.keycloak.testframework.realm.ClientBuilder;
+import org.keycloak.testframework.realm.RealmBuilder;
+import org.keycloak.testframework.realm.UserBuilder;
 
 public class SessionTestUtils {
-    public static RealmConfigBuilder configureSessionRealm(RealmConfigBuilder realm) {
+    public static RealmBuilder configureSessionRealm(RealmBuilder realm) {
         realm.ssoSessionIdleTimeout(1800)
                 .ssoSessionMaxLifespan(36000)
                 .clientSessionIdleTimeout(500)
                 .update(rep -> rep.setOfflineSessionIdleTimeout(Constants.DEFAULT_OFFLINE_SESSION_IDLE_TIMEOUT));
-        realm.addUser("user1").email("user1@localhost");
-        realm.addUser("user2").email("user2@localhost");
+        realm.users(
+                UserBuilder.create().username("user1").email("user1@localhost"),
+                UserBuilder.create().username("user2").email("user2@localhost"));
         return configureSessionClients(realm);
     }
 
-    public static RealmConfigBuilder configureSessionClients(RealmConfigBuilder realm) {
-        realm.addClient("test-app");
-        realm.addClient("third-party").consentRequired(true);
+    public static RealmBuilder configureSessionClients(RealmBuilder realm) {
+        realm.clients(
+                ClientBuilder.create("test-app"),
+                ClientBuilder.create("third-party").consentRequired(true));
         return realm;
     }
 

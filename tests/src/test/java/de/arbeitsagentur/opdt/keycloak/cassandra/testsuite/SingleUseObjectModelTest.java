@@ -32,8 +32,9 @@ import org.keycloak.testframework.annotations.InjectRealm;
 import org.keycloak.testframework.annotations.KeycloakIntegrationTest;
 import org.keycloak.testframework.injection.LifeCycle;
 import org.keycloak.testframework.realm.ManagedRealm;
+import org.keycloak.testframework.realm.RealmBuilder;
 import org.keycloak.testframework.realm.RealmConfig;
-import org.keycloak.testframework.realm.RealmConfigBuilder;
+import org.keycloak.testframework.realm.UserBuilder;
 import org.keycloak.testframework.remote.annotations.TestOnServer;
 
 @KeycloakIntegrationTest(config = CassandraKeycloakServerConfig.class)
@@ -169,8 +170,8 @@ public class SingleUseObjectModelTest extends CassandraModelTest {
 
     public static class SingleUseRealmConfig implements RealmConfig {
         @Override
-        public RealmConfigBuilder configure(RealmConfigBuilder realm) {
-            realm.addUser("user").id(USER_ID);
+        public RealmBuilder configure(RealmBuilder realm) {
+            realm.users(UserBuilder.create().username("user").id(USER_ID));
             return realm;
         }
     }

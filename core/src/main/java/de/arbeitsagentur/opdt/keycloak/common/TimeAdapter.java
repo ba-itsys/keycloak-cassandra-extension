@@ -69,4 +69,16 @@ public class TimeAdapter {
     public static Long fromSecondsToMilliseconds(int seconds) {
         return fromSecondsToMilliseconds(fromIntegerWithTimeInSecondsToLongWithTimeAsInSeconds(seconds));
     }
+
+    /**
+     * Clamps a lifespan in seconds into the range Cassandra accepts as a TTL. Non-positive values
+     * become the minimum TTL of 1 second, and values above the maximum of 630720000 seconds (20
+     * years) are capped at that maximum.
+     */
+    public static int toClampedTtl(long lifespanSeconds) {
+        if (lifespanSeconds <= 0L) {
+            return 1;
+        }
+        return (int) Math.min(lifespanSeconds, 630720000L);
+    }
 }

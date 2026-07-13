@@ -33,9 +33,11 @@ import org.keycloak.protocol.oidc.OIDCLoginProtocol;
 import org.keycloak.testframework.annotations.InjectRealm;
 import org.keycloak.testframework.annotations.KeycloakIntegrationTest;
 import org.keycloak.testframework.injection.LifeCycle;
+import org.keycloak.testframework.realm.ClientBuilder;
 import org.keycloak.testframework.realm.ManagedRealm;
+import org.keycloak.testframework.realm.RealmBuilder;
 import org.keycloak.testframework.realm.RealmConfig;
-import org.keycloak.testframework.realm.RealmConfigBuilder;
+import org.keycloak.testframework.realm.UserBuilder;
 import org.keycloak.testframework.remote.annotations.TestOnServer;
 
 @KeycloakIntegrationTest(config = CassandraKeycloakServerConfig.class)
@@ -110,11 +112,12 @@ public class UserSessionConcurrencyTest extends CassandraModelTest {
 
     public static class UserSessionConcurrencyRealmConfig implements RealmConfig {
         @Override
-        public RealmConfigBuilder configure(RealmConfigBuilder realm) {
+        public RealmBuilder configure(RealmBuilder realm) {
             realm.ssoSessionIdleTimeout(1800).ssoSessionMaxLifespan(36000).clientSessionIdleTimeout(500);
-            realm.addUser("user1").email("user1@localhost");
-            realm.addUser("user2").email("user2@localhost");
-            IntStream.range(0, CLIENTS_COUNT).forEach(i -> realm.addClient("client" + i));
+            realm.users(
+                    UserBuilder.create().username("user1").email("user1@localhost"),
+                    UserBuilder.create().username("user2").email("user2@localhost"));
+            IntStream.range(0, CLIENTS_COUNT).forEach(i -> realm.clients(ClientBuilder.create("client" + i)));
             return realm;
         }
     }

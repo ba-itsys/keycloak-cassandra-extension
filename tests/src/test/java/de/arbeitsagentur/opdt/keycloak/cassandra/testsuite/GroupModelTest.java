@@ -31,8 +31,9 @@ import org.keycloak.testframework.annotations.InjectRealm;
 import org.keycloak.testframework.annotations.KeycloakIntegrationTest;
 import org.keycloak.testframework.injection.LifeCycle;
 import org.keycloak.testframework.realm.ManagedRealm;
+import org.keycloak.testframework.realm.RealmBuilder;
 import org.keycloak.testframework.realm.RealmConfig;
-import org.keycloak.testframework.realm.RealmConfigBuilder;
+import org.keycloak.testframework.realm.UserBuilder;
 import org.keycloak.testframework.remote.annotations.TestOnServer;
 
 @KeycloakIntegrationTest(config = CassandraKeycloakServerConfig.class)
@@ -650,9 +651,9 @@ public class GroupModelTest extends CassandraModelTest {
 
     public static class GroupModelRealmConfig implements RealmConfig {
         @Override
-        public RealmConfigBuilder configure(RealmConfigBuilder realm) {
-            realm.addUser("john");
-            realm.addUser("mary");
+        public RealmBuilder configure(RealmBuilder realm) {
+            realm.users(
+                    UserBuilder.create().username("john"), UserBuilder.create().username("mary"));
             realm.update(rep -> rep.setGroups(List.of(
                     group(FIRST_GROUP_ID, "firstGroup"),
                     group(SECOND_GROUP_ID, "secondGroup"),

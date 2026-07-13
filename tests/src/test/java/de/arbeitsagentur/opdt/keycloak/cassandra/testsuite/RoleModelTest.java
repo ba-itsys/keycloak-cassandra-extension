@@ -38,10 +38,11 @@ import org.keycloak.models.RoleModel;
 import org.keycloak.testframework.annotations.InjectRealm;
 import org.keycloak.testframework.annotations.KeycloakIntegrationTest;
 import org.keycloak.testframework.injection.LifeCycle;
+import org.keycloak.testframework.realm.ClientBuilder;
 import org.keycloak.testframework.realm.ManagedRealm;
+import org.keycloak.testframework.realm.RealmBuilder;
 import org.keycloak.testframework.realm.RealmConfig;
-import org.keycloak.testframework.realm.RealmConfigBuilder;
-import org.keycloak.testframework.realm.RoleConfigBuilder;
+import org.keycloak.testframework.realm.RoleBuilder;
 import org.keycloak.testframework.remote.annotations.TestOnServer;
 
 @KeycloakIntegrationTest(config = CassandraKeycloakServerConfig.class)
@@ -348,24 +349,25 @@ public class RoleModelTest extends CassandraModelTest {
 
     public static class RoleModelRealmConfig implements RealmConfig {
         @Override
-        public RealmConfigBuilder configure(RealmConfigBuilder realm) {
-            realm.addClient(CLIENT_WITH_ROLES);
-            RoleConfigBuilder mainRole = realm.addRole("main-role").id(MAIN_ROLE_ID);
+        public RealmBuilder configure(RealmBuilder realm) {
+            realm.clients(ClientBuilder.create(CLIENT_WITH_ROLES));
+            RoleBuilder mainRole = RoleBuilder.create("main-role").id(MAIN_ROLE_ID);
             IntStream.range(0, 10).forEach(i -> {
-                role(realm.addRole(roleName(i)), i, " realm role.");
+                realm.realmRoles(role(RoleBuilder.create(roleName(i)), i, " realm role."));
                 mainRole.realmComposite(roleName(i));
             });
             IntStream.range(10, 20).forEach(i -> {
-                role(realm.addClientRole(CLIENT_WITH_ROLES, roleName(i)), i, " client role.");
+                realm.clientRoles(CLIENT_WITH_ROLES, role(RoleBuilder.create(roleName(i)), i, " client role."));
                 mainRole.clientComposite(CLIENT_WITH_ROLES, roleName(i));
             });
-            IntStream.range(0, 20).forEach(i -> realm.addRole("non-returned-role-" + i));
+            realm.realmRoles(mainRole);
+            IntStream.range(0, 20).forEach(i -> realm.realmRoles(RoleBuilder.create("non-returned-role-" + i)));
             return realm;
         }
 
-        private static void role(RoleConfigBuilder role, int index, String descriptionSuffix) {
+        private static RoleBuilder role(RoleBuilder role, int index, String descriptionSuffix) {
             String name = roleName(index);
-            role.id(roleId(index)).description("This is a description for " + name + descriptionSuffix);
+            return role.id(roleId(index)).description("This is a description for " + name + descriptionSuffix);
         }
 
         private static String roleName(int index) {

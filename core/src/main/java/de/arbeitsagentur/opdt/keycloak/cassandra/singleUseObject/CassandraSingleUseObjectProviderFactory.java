@@ -16,12 +16,12 @@
 
 package de.arbeitsagentur.opdt.keycloak.cassandra.singleUseObject;
 
-import static de.arbeitsagentur.opdt.keycloak.common.CommunityProfiles.isCassandraCacheProfileEnabled;
-import static de.arbeitsagentur.opdt.keycloak.common.CommunityProfiles.isCassandraProfileEnabled;
+import static de.arbeitsagentur.opdt.keycloak.cassandra.CassandraStoreConfig.isAreaEnabled;
 import static de.arbeitsagentur.opdt.keycloak.common.ProviderHelpers.createProviderCached;
 import static org.keycloak.userprofile.DeclarativeUserProfileProviderFactory.PROVIDER_PRIORITY;
 
 import com.google.auto.service.AutoService;
+import de.arbeitsagentur.opdt.keycloak.cassandra.CassandraStoreConfig.Area;
 import de.arbeitsagentur.opdt.keycloak.cassandra.connection.CassandraConnectionProvider;
 import org.keycloak.Config;
 import org.keycloak.models.KeycloakSession;
@@ -62,6 +62,6 @@ public class CassandraSingleUseObjectProviderFactory
 
     @Override
     public boolean isSupported(Config.Scope config) {
-        return isCassandraProfileEnabled() || isCassandraCacheProfileEnabled();
+        return isAreaEnabled(Area.SINGLE_USE_OBJECT);
     }
 }

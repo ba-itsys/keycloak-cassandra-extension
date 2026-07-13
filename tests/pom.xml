@@ -195,9 +195,6 @@
             <java.util.logging.manager>org.jboss.logmanager.LogManager</java.util.logging.manager>
             <org.jboss.logging.provider>log4j</org.jboss.logging.provider>
           </systemPropertyVariables>
-          <environmentVariables>
-            <KC_COMMUNITY_DATASTORE_CASSANDRA_ENABLED>true</KC_COMMUNITY_DATASTORE_CASSANDRA_ENABLED>
-          </environmentVariables>
         </configuration>
       </plugin>
       <plugin>

@@ -135,4 +135,76 @@ public interface UserDao extends TransactionalDao<User> {
     @Select(customWhereClause = "realm_id = :realmId")
     @StatementAttributes(executionProfileName = "read")
     PagingIterable<UserConsent> findUserConsentsByRealmId(String realmId);
+
+    @Update
+    @StatementAttributes(executionProfileName = "write")
+    void insertOrUpdate(UserVerifiableCredential verifiableCredential);
+
+    @Update
+    @StatementAttributes(executionProfileName = "write")
+    void insertOrUpdate(UserVerifiableCredentialById pointer);
+
+    @Select(customWhereClause = "user_id = :userId AND client_scope_id = :clientScopeId")
+    @StatementAttributes(executionProfileName = "read")
+    UserVerifiableCredential findVerifiableCredential(String userId, String clientScopeId);
+
+    @Select(customWhereClause = "user_id = :userId")
+    @StatementAttributes(executionProfileName = "read")
+    PagingIterable<UserVerifiableCredential> findVerifiableCredentialsByUser(String userId);
+
+    @Select(customWhereClause = "id = :id")
+    @StatementAttributes(executionProfileName = "read")
+    UserVerifiableCredentialById findVerifiableCredentialPointer(String id);
+
+    @Delete(entityClass = UserVerifiableCredential.class)
+    @StatementAttributes(executionProfileName = "write")
+    boolean deleteVerifiableCredential(String userId, String clientScopeId);
+
+    @Delete(entityClass = UserVerifiableCredentialById.class)
+    @StatementAttributes(executionProfileName = "write")
+    boolean deleteVerifiableCredentialPointer(String id);
+
+    @Update(ttl = ":ttl")
+    @StatementAttributes(executionProfileName = "write")
+    void insertOrUpdate(IssuedVerifiableCredential issuedVerifiableCredential, int ttl);
+
+    @Update
+    @StatementAttributes(executionProfileName = "write")
+    void insertOrUpdate(IssuedVerifiableCredential issuedVerifiableCredential);
+
+    @Update(ttl = ":ttl")
+    @StatementAttributes(executionProfileName = "write")
+    void insertOrUpdate(IssuedVerifiableCredentialById pointer, int ttl);
+
+    @Update
+    @StatementAttributes(executionProfileName = "write")
+    void insertOrUpdate(IssuedVerifiableCredentialById pointer);
+
+    @Select(customWhereClause = "user_id = :userId AND id = :id")
+    @StatementAttributes(executionProfileName = "read")
+    IssuedVerifiableCredential findIssuedVerifiableCredential(String userId, String id);
+
+    @Select(customWhereClause = "user_id = :userId")
+    @StatementAttributes(executionProfileName = "read")
+    PagingIterable<IssuedVerifiableCredential> findIssuedVerifiableCredentialsByUser(String userId);
+
+    @Select(customWhereClause = "id = :id")
+    @StatementAttributes(executionProfileName = "read")
+    IssuedVerifiableCredentialById findIssuedVerifiableCredentialPointer(String id);
+
+    @Delete(entityClass = IssuedVerifiableCredential.class)
+    @StatementAttributes(executionProfileName = "write")
+    boolean deleteIssuedVerifiableCredential(String userId, String id);
+
+    @Delete(entityClass = IssuedVerifiableCredentialById.class)
+    @StatementAttributes(executionProfileName = "write")
+    boolean deleteIssuedVerifiableCredentialPointer(String id);
+
+    @Delete(entityClass = UserVerifiableCredential.class, customWhereClause = "user_id = :userId")
+    @StatementAttributes(executionProfileName = "write")
+    boolean deleteVerifiableCredentialsByUser(String userId);
+
+    @Delete(entityClass = IssuedVerifiableCredential.class, customWhereClause = "user_id = :userId")
+    @StatementAttributes(executionProfileName = "write")
+    boolean deleteIssuedVerifiableCredentialsByUser(String userId);
 }

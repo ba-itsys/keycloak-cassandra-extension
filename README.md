@@ -10,19 +10,38 @@ Requires Keycloak >= 26.5.2 (older versions may be supported by older versions o
 
 - Download the JAR from Maven Central: https://repo1.maven.org/maven2/de/arbeitsagentur/opdt/keycloak-cassandra-extension/xxx/keycloak-cassandra-extension-xxx.jar
 - Put the JAR in Keycloak's providers folder
-- Set `KC_COMMUNITY_DATASTORE_CASSANDRA_ENABLED=true` (`kc.community.datastore.cassandra.enabled=true` as system property) or `KC_COMMUNITY_DATASTORE_CASSANDRA_CACHE_ENABLED=true` (`kc.community.datastore.cassandra.cache.enabled=true` as system property) to enable the extension
+- Select the cassandra datastore with `--spi-datastore--provider=cassandra` and enable the required preview feature with `--features=stateless`
 - Set the necessary configuration options like cassandra endpoints (see the overview below)
 
 > :warning: **Important information:**
-Since map storage has been removed from Keycloak, using different storage providers for different storage areas (like users, roles) requires you to implement your own `DatastoreProvider`.
-If "cache mode" is active (`KC_COMMUNITY_DATASTORE_CASSANDRA_CACHE_ENABLED=true`), default providers (jpa) are used for non-cache areas.
+Since map storage has been removed from Keycloak, using different storage providers for different storage areas (like users, roles) requires this extension to provide its own `DatastoreProvider`, which is selected as shown above. (The former `KC_COMMUNITY_DATASTORE_CASSANDRA_ENABLED` / `..._CACHE_ENABLED` env vars have been removed in favour of the datastore selection.)
+
+### Storage areas
+
+Which storage areas cassandra serves is controlled by `--spi-datastore--cassandra--areas` (default: `all`):
+
+- `all` — every area; cassandra is the full datastore and no relational database is needed (the default).
+- `cache` — only the dynamic areas (`user-session`, `auth-session`, `login-failure`, `single-use-object`, `revoked-token`); a relational database (JPA) serves the rest. This replaces the former "cache mode".
+- an explicit comma-separated list of area names: `realm, client, client-scope, role, group, identity-provider, user, user-session, auth-session, login-failure, single-use-object, revoked-token`.
+
+An explicit list also lets cassandra fill the areas another datastore extension does not serve. For example, paired with the [filestore extension](https://github.com/ba-itsys/keycloak-extension-filestore) (which serves the config areas — realms, clients, roles, groups — from files) while cassandra serves users and sessions:
+
+```
+--spi-datastore--provider=file
+--spi-datastore--cassandra--areas=user,user-session,auth-session,login-failure,single-use-object,revoked-token
+```
+
+The filestore extension follows the same activation patterns (datastore selection, `stateless`, automatic cache disables), so the two compose: `file` is the selected datastore and serves its config areas, while its dynamic-area fall-through resolves to cassandra's providers for the areas listed above.
+
+When `cassandra` is the selected datastore, this extension automatically disables the coherency-sensitive realm and authorization caches (unsafe under `stateless`), so you no longer need to set those by hand.
 
 The following parameters might be needed in addition to the configuration options of this extension (see below):
 
-| CLI-Parameter                                                           | Description                               |
-|-------------------------------------------------------------------------|-------------------------------------------|
-| --features-disabled=authorization,admin-fine-grained-authz,organization | Disable unsupported features              |
-| --spi-connections-jpa-legacy-enabled=false                              | Deactivate automatic JPA schema migration |
+| CLI-Parameter                                                           | Description                                                              |
+|-------------------------------------------------------------------------|-------------------------------------------------------------------------|
+| --features=stateless                                                    | Required — moves auth/sessions/tokens to the datastore                   |
+| --features-disabled=authorization,admin-fine-grained-authz,organization | Disable unsupported features                                            |
+| --spi-connections-jpa-legacy-enabled=false                              | Deactivate automatic JPA schema migration (full mode; keep on for `cache`) |
 
 ## Configuration options
 

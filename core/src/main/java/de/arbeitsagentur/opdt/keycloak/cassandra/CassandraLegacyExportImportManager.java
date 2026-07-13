@@ -56,7 +56,7 @@ public class CassandraLegacyExportImportManager extends DefaultExportImportManag
         createRoleMappings(userRep, user, newRealm);
         if (userRep.getClientConsents() != null) {
             for (UserConsentRepresentation consentRep : userRep.getClientConsents()) {
-                UserConsentModel consentModel = RepresentationToModel.toModel(newRealm, consentRep);
+                UserConsentModel consentModel = RepresentationToModel.toModel(newRealm, consentRep, session);
                 session.users().addConsent(newRealm, user.getId(), consentModel);
             }
         }

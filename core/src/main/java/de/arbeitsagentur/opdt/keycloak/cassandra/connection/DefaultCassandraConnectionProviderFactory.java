@@ -40,6 +40,10 @@ import de.arbeitsagentur.opdt.keycloak.cassandra.clientScope.persistence.ClientS
 import de.arbeitsagentur.opdt.keycloak.cassandra.clientScope.persistence.ClientScopeMapperBuilder;
 import de.arbeitsagentur.opdt.keycloak.cassandra.clientScope.persistence.ClientScopeRepository;
 import de.arbeitsagentur.opdt.keycloak.cassandra.clientScope.persistence.entities.ClientScopeValue;
+import de.arbeitsagentur.opdt.keycloak.cassandra.deploymentState.persistence.CassandraDeploymentStateRepository;
+import de.arbeitsagentur.opdt.keycloak.cassandra.deploymentState.persistence.DeploymentStateMapper;
+import de.arbeitsagentur.opdt.keycloak.cassandra.deploymentState.persistence.DeploymentStateMapperBuilder;
+import de.arbeitsagentur.opdt.keycloak.cassandra.deploymentState.persistence.DeploymentStateRepository;
 import de.arbeitsagentur.opdt.keycloak.cassandra.group.persistence.CassandraGroupRepository;
 import de.arbeitsagentur.opdt.keycloak.cassandra.group.persistence.GroupMapper;
 import de.arbeitsagentur.opdt.keycloak.cassandra.group.persistence.GroupMapperBuilder;
@@ -281,6 +285,12 @@ public class DefaultCassandraConnectionProviderFactory
         SingleUseObjectRepository singleUseObjectRepository =
                 new CassandraSingleUseObjectRepository(singleUseObjectMapper.singleUseObjectDao());
 
+        DeploymentStateMapper deploymentStateMapper = new DeploymentStateMapperBuilder(cqlSession)
+                .withSchemaValidationEnabled(false)
+                .build();
+        DeploymentStateRepository deploymentStateRepository =
+                new CassandraDeploymentStateRepository(deploymentStateMapper.deploymentStateDao());
+
         ClientMapper clientMapper = new ClientMapperBuilder(cqlSession)
                 .withSchemaValidationEnabled(false)
                 .build();
@@ -301,6 +311,7 @@ public class DefaultCassandraConnectionProviderFactory
         cassandraRepository.setAuthSessionRepository(authSessionRepository);
         cassandraRepository.setLoginFailureRepository(loginFailureRepository);
         cassandraRepository.setSingleUseObjectRepository(singleUseObjectRepository);
+        cassandraRepository.setDeploymentStateRepository(deploymentStateRepository);
         cassandraRepository.setClientRepository(clientRepository);
         cassandraRepository.setClientScopeRepository(clientScopeRepository);
 
