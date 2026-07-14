@@ -1,5 +1,21 @@
 # Changelog
 
+## [6.0.0](https://github.com/ba-itsys/keycloak-cassandra-extension/compare/v5.7.3...v6.0.0) (2026-07-14)
+
+
+### ⚠ BREAKING CHANGES
+
+* require Keycloak 26.7.0 with stateless and self-configure the datastore
+
+### Features
+
+* require Keycloak 26.7.0 with stateless and self-configure the datastore ([1c3acb6](https://github.com/ba-itsys/keycloak-cassandra-extension/commit/1c3acb63734253b778e51666f7bbadcf8443f3c7))
+
+
+### Dependencies
+
+* **deps-dev:** bump com.diffplug.spotless:spotless-maven-plugin ([1ed4e41](https://github.com/ba-itsys/keycloak-cassandra-extension/commit/1ed4e412be04266eb79b5cd363f2941a122b9c65))
+
 ## [5.7.3](https://github.com/ba-itsys/keycloak-cassandra-extension/compare/v5.7.2...v5.7.3) (2026-07-02)
 
 
