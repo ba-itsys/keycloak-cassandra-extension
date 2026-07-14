@@ -48,13 +48,15 @@ public class RevokedTokenModelTest extends CassandraModelTest {
         String tokenId = UUID.randomUUID().toString();
 
         inCommittedTransaction(testSession, session -> {
-            session.revokedTokens().put(tokenId, 3L);
+            session.revokedTokens().put(tokenId, 2L);
         });
         inCommittedTransaction(testSession, session -> {
             Assert.assertTrue(session.revokedTokens().contains(tokenId));
         });
 
-        sleep(5000);
+        // Expiry is enforced by Cassandra's server-side TTL (2s), which no app-side time offset can
+        // fast-forward, so a real wait past the TTL is required.
+        sleep(3000);
 
         inCommittedTransaction(testSession, session -> {
             Assert.assertFalse(session.revokedTokens().contains(tokenId));
