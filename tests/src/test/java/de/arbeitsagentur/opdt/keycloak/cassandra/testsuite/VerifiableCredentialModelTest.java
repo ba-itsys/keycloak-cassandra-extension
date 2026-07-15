@@ -193,16 +193,14 @@ public class VerifiableCredentialModelTest extends CassandraModelTest {
 
         withRealm(testSession, REALM_NAME, (session, realm) -> {
             IssuedVerifiableCredentialModel issued = new IssuedVerifiableCredentialModel(USER_ID, vcId, "vc-client");
-            issued.setExpiresAt(Time.currentTimeMillis() + 3000L);
+            issued.setExpiresAt(Time.currentTimeMillis() + 2000L);
             session.users().addIssuedVerifiableCredential(issued);
             return null;
         });
 
-        withRealm(testSession, REALM_NAME, (session, realm) -> session.users()
-                .getIssuedVerifiableCredentialsStreamByUser(USER_ID)
-                .toList());
-
-        sleep(5000);
+        // Expiry is enforced by Cassandra's server-side TTL (~2s here), which no app-side time offset
+        // can fast-forward, so a real wait past the TTL is required.
+        sleep(3000);
 
         withRealm(testSession, REALM_NAME, (session, realm) -> {
             assertThat(
