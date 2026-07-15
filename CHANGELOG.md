@@ -1,5 +1,12 @@
 # Changelog
 
+## [6.0.1](https://github.com/ba-itsys/keycloak-cassandra-extension/compare/v6.0.0...v6.0.1) (2026-07-15)
+
+
+### Bug Fixes
+
+* readme + tests ([#321](https://github.com/ba-itsys/keycloak-cassandra-extension/issues/321)) ([1da9e9c](https://github.com/ba-itsys/keycloak-cassandra-extension/commit/1da9e9cae3eb7b42caa7b1f9b50a522169b03017))
+
 ## [6.0.0](https://github.com/ba-itsys/keycloak-cassandra-extension/compare/v5.7.3...v6.0.0) (2026-07-14)
 
 
