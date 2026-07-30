@@ -1,5 +1,17 @@
 # Changelog
 
+## [6.1.0](https://github.com/ba-itsys/keycloak-cassandra-extension/compare/v6.0.1...v6.1.0) (2026-07-30)
+
+
+### Features
+
+* conditionally activate areas by realm attribute ([14204b4](https://github.com/ba-itsys/keycloak-cassandra-extension/commit/14204b4d864696d7d1c5942deed2bbb25fedca85))
+
+
+### Dependencies
+
+* **deps-dev:** bump org.apache.maven.plugins:maven-jar-plugin ([18e54cd](https://github.com/ba-itsys/keycloak-cassandra-extension/commit/18e54cd45e7c936881319e777020d7514556916d))
+
 ## [6.0.1](https://github.com/ba-itsys/keycloak-cassandra-extension/compare/v6.0.0...v6.0.1) (2026-07-15)
 
 
