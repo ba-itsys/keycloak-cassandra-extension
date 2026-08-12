@@ -28,20 +28,21 @@ services:
   keycloak:
     image: quay.io/keycloak/keycloak:26.7.0
     volumes:
-      - ${PWD}/core/target/keycloak-cassandra-extension-5.4.7-SNAPSHOT.jar:/opt/keycloak/providers/keycloak-cassandra-extension.jar
+      - ${PWD}/core/target/keycloak-cassandra-extension-6.1.1-SNAPSHOT.jar:/opt/keycloak/providers/keycloak-cassandra-extension.jar
     environment:
-      - KC_COMMUNITY_DATASTORE_CASSANDRA_ENABLED=true
       - KC_SPI_CONNECTIONS_JPA_LEGACY_ENABLED=false
       - KC_SPI_CASSANDRA_CONNECTION_DEFAULT_PORT=9042
       - KC_SPI_CASSANDRA_CONNECTION_DEFAULT_CONTACT_POINTS=cassandra
       - KC_SPI_CASSANDRA_CONNECTION_DEFAULT_LOCAL_DATACENTER=datacenter1
       - KC_SPI_CASSANDRA_CONNECTION_DEFAULT_KEYSPACE=test
+      - KC_SPI_CASSANDRA_CONNECTION_DEFAULT_USERNAME=cassandra
+      - KC_SPI_CASSANDRA_CONNECTION_DEFAULT_PASSWORD=cassandra
       - KC_SPI_CASSANDRA_CONNECTION_DEFAULT_REPLICATION_FACTOR=1
-      - KEYCLOAK_ADMIN=admin
-      - KEYCLOAK_ADMIN_PASSWORD=admin
+      - KC_BOOTSTRAP_ADMIN_USERNAME=admin
+      - KC_BOOTSTRAP_ADMIN_PASSWORD=admin
       - JAVA_OPTS_APPEND="-Ddatastax-java-driver.advanced.ssl-engine-factory=none"
     entrypoint: /opt/keycloak/bin/kc.sh
-    command: -v start-dev --cache=local --features-disabled=authorization,organization,admin-fine-grained-authz
+    command: -v start-dev --spi-datastore--provider=cassandra --features=stateless --features-disabled=authorization,organization,admin-fine-grained-authz
     ports:
       - 8080:8080
     networks:
