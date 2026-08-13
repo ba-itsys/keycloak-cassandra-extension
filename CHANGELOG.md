@@ -1,5 +1,17 @@
 # Changelog
 
+## [6.1.1](https://github.com/ba-itsys/keycloak-cassandra-extension/compare/v6.1.0...v6.1.1) (2026-08-13)
+
+
+### Bug Fixes
+
+* add reference.conf to shaded jar ([#331](https://github.com/ba-itsys/keycloak-cassandra-extension/issues/331)) ([5dcc904](https://github.com/ba-itsys/keycloak-cassandra-extension/commit/5dcc9042aeafcf93fcbf258ba79970a153cb944d))
+
+
+### Dependencies
+
+* **deps-dev:** bump com.diffplug.spotless:spotless-maven-plugin ([62af8c4](https://github.com/ba-itsys/keycloak-cassandra-extension/commit/62af8c48a2fdcc1a0866afd95624d16b9e2d0147))
+
 ## [6.1.0](https://github.com/ba-itsys/keycloak-cassandra-extension/compare/v6.0.1...v6.1.0) (2026-07-30)
 
 
