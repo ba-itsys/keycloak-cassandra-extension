@@ -8,38 +8,56 @@ Requires Keycloak >= 26.7.0 (older versions may be supported by older versions o
 
 ## How to use
 
-- Download the JAR from Maven Central: https://repo1.maven.org/maven2/de/arbeitsagentur/opdt/keycloak-cassandra-extension/xxx/keycloak-cassandra-extension-xxx.jar
+- Download the JAR from Maven
+  Central: https://repo1.maven.org/maven2/de/arbeitsagentur/opdt/keycloak-cassandra-extension/xxx/keycloak-cassandra-extension-xxx.jar
 - Put the JAR in Keycloak's providers folder
-- Select the cassandra datastore with `--spi-datastore--provider=cassandra` and enable the required preview feature with `--features=stateless`
+- Select the cassandra datastore with `--spi-datastore--provider=cassandra` and enable the required preview feature with
+  `--features=stateless`
 - Set the necessary configuration options like cassandra endpoints (see the overview below)
 
 > :warning: **Important information:**
-Since map storage has been removed from Keycloak, using different storage providers for different storage areas (like users, roles) requires this extension to provide its own `DatastoreProvider`, which is selected as shown above. (The former `KC_COMMUNITY_DATASTORE_CASSANDRA_ENABLED` / `..._CACHE_ENABLED` env vars have been removed in favour of the datastore selection.)
+> Since map storage has been removed from Keycloak, using different storage providers for different storage areas (like
+> users, roles) requires this extension to provide its own `DatastoreProvider`, which is selected as shown above. (The
+> former `KC_COMMUNITY_DATASTORE_CASSANDRA_ENABLED` / `..._CACHE_ENABLED` env vars have been removed in favour of the
+> datastore selection.)
 
 ### Storage areas
 
 Which storage areas cassandra serves is controlled by `--spi-datastore--cassandra--areas` (default: `all`):
 
 - `all` — every area; cassandra is the full datastore and no relational database is needed (the default).
-- `cache` — only the dynamic areas (`user-session`, `auth-session`, `login-failure`, `single-use-object`, `revoked-token`); a relational database (JPA) serves the rest. This replaces the former "cache mode".
-- an explicit comma-separated list of area names: `realm, client, client-scope, role, group, identity-provider, user, user-session, auth-session, login-failure, single-use-object, revoked-token`.
+- `cache` — only the dynamic areas (`user-session`, `auth-session`, `login-failure`, `single-use-object`,
+  `revoked-token`); a relational database (JPA) serves the rest. This replaces the former "cache mode".
+- an explicit comma-separated list of area names:
+  `realm, client, client-scope, role, group, identity-provider, user, user-session, auth-session, login-failure, single-use-object, revoked-token`.
 
-An explicit list also lets cassandra fill the areas another datastore extension does not serve. For example, paired with the [filestore extension](https://github.com/ba-itsys/keycloak-extension-filestore) (which serves the config areas — realms, clients, roles, groups — from files) while cassandra serves users and sessions:
+An explicit list also lets cassandra fill the areas another datastore extension does not serve. For example, paired with
+the [filestore extension](https://github.com/ba-itsys/keycloak-extension-filestore) (which serves the config areas —
+realms, clients, roles, groups — from files) while cassandra serves users and sessions:
 
 ```
 --spi-datastore--provider=file
 --spi-datastore--cassandra--areas=user,user-session,auth-session,login-failure,single-use-object,revoked-token
 ```
 
-The filestore extension follows the same activation patterns (datastore selection, `stateless`, automatic cache disables), so the two compose: `file` is the selected datastore and serves its config areas, while its dynamic-area fall-through resolves to cassandra's providers for the areas listed above.
+The filestore extension follows the same activation patterns (datastore selection, `stateless`, automatic cache
+disables), so the two compose: `file` is the selected datastore and serves its config areas, while its dynamic-area
+fall-through resolves to cassandra's providers for the areas listed above.
 
-When `cassandra` is the selected datastore, this extension automatically disables the coherency-sensitive realm and authorization caches (unsafe under `stateless`), so you no longer need to set those by hand.
+When `cassandra` is the selected datastore, this extension automatically disables the coherency-sensitive realm and
+authorization caches (unsafe under `stateless`), so you no longer need to set those by hand.
 
 ### Conditional storage areas (per realm)
 
-`--spi-datastore--cassandra--conditional-areas` routes areas per realm instead of globally. Cassandra serves a conditional area only for realms that have the opt-in attribute of that area. All other realms keep the provider that would have been default without this extension (for example the filestore or JPA provider). Every area except `realm` itself can be conditional (`all` means every area except `realm`). An area cannot be listed in both `areas` and `conditional-areas`.
+`--spi-datastore--cassandra--conditional-areas` routes areas per realm instead of globally. Cassandra serves a
+conditional area only for realms that have the opt-in attribute of that area. All other realms keep the provider that
+would have been default without this extension (for example the filestore or JPA provider). Every area except `realm`
+itself can be conditional (`all` means every area except `realm`). An area cannot be listed in both `areas` and
+`conditional-areas`.
 
-The opt-in is a realm attribute named `datastore<Area>Enabled` with the camel-cased area name (for example `datastoreClientEnabled`, `datastoreClientScopeEnabled`, `datastoreUserSessionEnabled`). Example: clients come from cassandra only for realms with `datastoreClientEnabled=true`. Users and sessions always come from cassandra.
+The opt-in is a realm attribute named `datastore<Area>Enabled` with the camel-cased area name (for example
+`datastoreClientEnabled`, `datastoreClientScopeEnabled`, `datastoreUserSessionEnabled`). Example: clients come from
+cassandra only for realms with `datastoreClientEnabled=true`. Users and sessions always come from cassandra.
 
 ```
 --spi-datastore--provider=file
@@ -49,17 +67,27 @@ The opt-in is a realm attribute named `datastore<Area>Enabled` with the camel-ca
 
 Notes and caveats:
 
-- Every conditional area needs a fallback provider (another registered provider of the same SPI). The server fails at startup when there is none. The session-related areas (`user-session`, `auth-session`, `login-failure`, `single-use-object`, `revoked-token`) replace the embedded infinispan providers, so infinispan cannot be their fallback. These areas can only be conditional when another datastore extension serves them.
-- Routing happens per call and uses the `RealmModel` argument of the called method. SPIs without realm arguments (`single-use-object`, `revoked-token`, `identity-provider`) use the session context realm. Calls with no resolvable realm stay on cassandra.
-- The attribute only controls where new lookups and writes go. It does not migrate data. Entities created while the attribute was unset stay in the fallback store. They are no longer visible once the attribute is set. The same applies in the other direction.
-- Realm import creates the default clients and roles before the imported realm attributes are applied. If an imported realm representation already contains the opt-in attribute, those defaults therefore end up in the fallback store. Create the realm first, then set the attribute, then create the entities of that area (or migrate existing entities before changing the attribute).
+- Every conditional area needs a fallback provider (another registered provider of the same SPI). The server fails at
+  startup when there is none. The session-related areas (`user-session`, `auth-session`, `login-failure`,
+  `single-use-object`, `revoked-token`) replace the embedded infinispan providers, so infinispan cannot be their
+  fallback. These areas can only be conditional when another datastore extension serves them.
+- Routing happens per call and uses the `RealmModel` argument of the called method. SPIs without realm arguments
+  (`single-use-object`, `revoked-token`, `identity-provider`) use the session context realm. Calls with no resolvable
+  realm stay on cassandra.
+- The attribute only controls where new lookups and writes go. It does not migrate data. Entities created while the
+  attribute was unset stay in the fallback store. They are no longer visible once the attribute is set. The same applies
+  in the other direction.
+- Realm import creates the default clients and roles before the imported realm attributes are applied. If an imported
+  realm representation already contains the opt-in attribute, those defaults therefore end up in the fallback store.
+  Create the realm first, then set the attribute, then create the entities of that area (or migrate existing entities
+  before changing the attribute).
 
 The following parameters might be needed in addition to the configuration options of this extension (see below):
 
-| CLI-Parameter                                                           | Description                                                              |
-|-------------------------------------------------------------------------|-------------------------------------------------------------------------|
-| --features=stateless                                                    | Required — moves auth/sessions/tokens to the datastore                   |
-| --features-disabled=authorization,admin-fine-grained-authz,organization | Disable unsupported features                                            |
+| CLI-Parameter                                                           | Description                                                                |
+|-------------------------------------------------------------------------|----------------------------------------------------------------------------|
+| --features=stateless                                                    | Required — moves auth/sessions/tokens to the datastore                     |
+| --features-disabled=authorization,admin-fine-grained-authz,organization | Disable unsupported features                                               |
 | --spi-connections-jpa-legacy-enabled=false                              | Deactivate automatic JPA schema migration (full mode; keep on for `cache`) |
 
 ## Configuration options
@@ -81,34 +109,50 @@ The following parameters might be needed in addition to the configuration option
 Keycloak Organizations are currently *not* supported and have to be turned off.
 
 ### User Lookup
+
 Due to Cassandras query first nature, users can only be looked up by specific fields.
 `UserProvider::searchForUserStream` supports the following subset of Keycloaks standard search attributes:
+
 - `keycloak.session.realm.users.query.search` for a case insensitive username search
 - `keycloak.session.realm.users.query.include_service_account` to include service accounts
 - `email` for an email search
 
-`UserProvider::searchForUserByUserAttributeStream` by default iterates all users in the entire database to filter for the requested attribute in-memory.
-For efficient searches, attributes can be defined as **indexed attributes** by prefixing their name with **indexed.**, e.g. **indexed.businessKey**
+`UserProvider::searchForUserByUserAttributeStream` by default iterates all users in the entire database to filter for
+the requested attribute in-memory.
+For efficient searches, attributes can be defined as **indexed attributes** by prefixing their name with **indexed.**,
+e.g. **indexed.businessKey**
 
 ### Conditional updates / optimistic locking
-All write-queries are done conditionally via Cassandra Lightweight Transactions. Therefore we store a version column in each of the tables. To be able to use this to get notified if a conflicting change occured after data was read, the entityVersion is exposed via a **readonly attribute readonly.entityVersion**.
+
+All write-queries are done conditionally via Cassandra Lightweight Transactions. Therefore we store a version column in
+each of the tables. To be able to use this to get notified if a conflicting change occured after data was read, the
+entityVersion is exposed via a **readonly attribute readonly.entityVersion**.
 In order to pass a version in update operations, one can use the corresponding attribute **internal.entityVersion**.
 
 ### Uniqueness across username and password
 
-This extension supports additional checks to prevent setting username to a value that is already as email of another user and setting email to a value used as username.
+This extension supports additional checks to prevent setting username to a value that is already as email of another
+user and setting email to a value used as username.
 
-To enable these checks for a realm, set its attribute `enableCheckForDuplicatesAcrossUsernameAndEmail` to `true` (default when not set: `false`)
+To enable these checks for a realm, set its attribute `enableCheckForDuplicatesAcrossUsernameAndEmail` to `true`
+(default when not set: `false`)
 
 ### Multi-Tab Refresh Token Rotation
-This extension adds support for a grace period when checking for reuses. It can be set via `refreshTokenReuseInterval` realm attribute. Refresh token reuses during this grace period are allowed, which can be useful in case of retries / network problems.
+
+This extension adds support for a grace period when checking for reuses. It can be set via `refreshTokenReuseInterval`
+realm attribute. Refresh token reuses during this grace period are allowed, which can be useful in case of retries /
+network problems.
 
 ### Unattended service account role assignment
-Keycloak creates a service account user for each client with `serviceAccountEnabled` set to `true`.
-This extension allows to dynamically assign roles to this service account. This needs to be enabled per role by setting an attribute `unattendedServiceAccountAssignment.enabled` to true.
-It can further be restricted by setting the role attribute `unattendedServiceAccountAssignment.clientIdPattern` to a regex matching all client-ids where this role can be dynamically assigned.
 
-To assign a role to a service account, a client attribute `initialServiceAccountRoles` needs to contain a comma-separated list of all role ids to set (which need to have the aforementioned attributes set).
+Keycloak creates a service account user for each client with `serviceAccountEnabled` set to `true`.
+This extension allows to dynamically assign roles to this service account. This needs to be enabled per role by setting
+an attribute `unattendedServiceAccountAssignment.enabled` to true.
+It can further be restricted by setting the role attribute `unattendedServiceAccountAssignment.clientIdPattern` to a
+regex matching all client-ids where this role can be dynamically assigned.
+
+To assign a role to a service account, a client attribute `initialServiceAccountRoles` needs to contain a
+comma-separated list of all role ids to set (which need to have the aforementioned attributes set).
 
 ### Private image registries
 
@@ -129,7 +173,8 @@ hub.image.name.prefix=private-registry/3rd-party/
 
 - **JDK**: See `pom.xml` for the required Java version.
 - **Maven**: Used for building the project.
-- **Docker**: Required for running integration tests via Testcontainers. A `docker-compose.yaml` is provided for a local setup including Cassandra.
+- **Docker**: Required for running integration tests via Testcontainers. A `docker-compose.yaml` is provided for a local
+  setup including Cassandra.
 
 ### Checks (formatting and tests)
 
@@ -150,7 +195,7 @@ use `mvn -Dkeycloak.testsuite.start-cassandra-container=false verify`
 ## Conflicts with the JPA implementation (since 26.1)
 
 The official Keycloak implementation now executes a `dependsOn()` for each provider. Even if it has a lower priority.
-This will implicitly initialize the default JPA-Provider. 
+This will implicitly initialize the default JPA-Provider.
 
 To circumvent this problem you may want to define a "NullProvider" which overrides the default JPA-Provider.
 
@@ -172,3 +217,20 @@ To run the tests with Podman, configure the Docker compatibility socket:
 export DOCKER_HOST=unix://${XDG_RUNTIME_DIR}/podman/podman.sock
 mvn clean verify
 ```
+
+## Contributing
+
+Contributions are welcome! For detailed instructions, please refer to our
+central [Contributing Guide](https://github.com/ba-itsys/.github/blob/main/CONTRIBUTING.md).
+
+In short:
+
+- **Commit Guidelines**: We strictly follow [Conventional Commits](https://www.conventionalcommits.org/) — the commit
+  type (e.g., `feat`, `fix`, `docs`) drives our automated versioning and changelog generation. All commits must be
+  signed off with `git commit -s` (DCO).
+- **Pull Request Process**: Fork the repository, create a feature branch from `main`, and open a Pull Request against
+  `main` (rebased on the latest `main`). Every bug fix or new feature should include corresponding tests.
+- **Release Process**: Releases are automated with [release-please](https://github.com/googleapis/release-please), which
+  parses the conventional commits from the merged history to create version bumps, changelogs, and releases. See
+  the [Release Process documentation](https://github.com/ba-itsys/.github/blob/main/docs/release-process.md) for details
+  on commit types, validation, and the full release flow.
