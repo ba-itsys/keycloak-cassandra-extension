@@ -1,5 +1,20 @@
 # Changelog
 
+## [6.1.3](https://github.com/ba-itsys/keycloak-cassandra-extension/compare/v6.1.2...v6.1.3) (2026-09-25)
+
+
+### Dependencies
+
+* **deps-dev:** bump com.diffplug.spotless:spotless-maven-plugin ([a4d8593](https://github.com/ba-itsys/keycloak-cassandra-extension/commit/a4d859373b4dae749cb73f9213877ec0a873ecf9))
+* **deps:** bump keycloak.version from 26.7.3 to 26.7.4 ([94901ad](https://github.com/ba-itsys/keycloak-cassandra-extension/commit/94901adcd2338e61f89b9915f390d7869b1c1dcb))
+* **deps:** bump org.projectlombok:lombok from 1.18.46 to 1.18.48 ([c581ef0](https://github.com/ba-itsys/keycloak-cassandra-extension/commit/c581ef0cbf7306ba26a5764e3b403271c869e3e0))
+* **deps:** bump org.slf4j:slf4j-nop from 2.0.18 to 2.0.19 ([88b96fc](https://github.com/ba-itsys/keycloak-cassandra-extension/commit/88b96fcbc9cbad989fab89c6e37a4a69c2caf00c))
+
+
+### Documentation
+
+* add contributing guidelines to README ([12a1def](https://github.com/ba-itsys/keycloak-cassandra-extension/commit/12a1def442f05fdb1d8768199e3d2f29fcb80b8e))
+
 ## [6.1.2](https://github.com/ba-itsys/keycloak-cassandra-extension/compare/v6.1.1...v6.1.2) (2026-09-04)
 
 
