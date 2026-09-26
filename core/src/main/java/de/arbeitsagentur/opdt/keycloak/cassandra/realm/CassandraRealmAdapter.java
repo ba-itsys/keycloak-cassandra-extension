@@ -45,7 +45,7 @@ import org.keycloak.representations.idm.RealmRepresentation;
 
 @EqualsAndHashCode(callSuper = true)
 @JBossLog
-public class CassandraRealmAdapter extends TransactionalModelAdapter<Realm> implements RealmModel {
+public class CassandraRealmAdapter extends TransactionalModelAdapter<Realm> implements StorageProviderRealmModel {
     private static final String COMPONENT_PROVIDER_EXISTS_DISABLED =
             "component.provider.exists.disabled"; // Copied from MapRealmAdapter
     public static final String DEFAULT_GROUP_IDS = AttributeTypes.INTERNAL_ATTRIBUTE_PREFIX + "defaultGroupIds";
