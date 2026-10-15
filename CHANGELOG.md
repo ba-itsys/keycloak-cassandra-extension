@@ -1,5 +1,20 @@
 # Changelog
 
+## [6.1.4](https://github.com/ba-itsys/keycloak-cassandra-extension/compare/v6.1.3...v6.1.4) (2026-10-15)
+
+
+### Bug Fixes
+
+* build the jar with a fixed name and update docker-compose ([#232](https://github.com/ba-itsys/keycloak-cassandra-extension/issues/232)) ([12ec51e](https://github.com/ba-itsys/keycloak-cassandra-extension/commit/12ec51e64ba5754731d13b0f94c1a812bea42f93))
+* disable jpa realm provider when cassandra serves realms ([#334](https://github.com/ba-itsys/keycloak-cassandra-extension/issues/334)) ([e2f3b80](https://github.com/ba-itsys/keycloak-cassandra-extension/commit/e2f3b80db20c23be18f26fef61d3a8ef704b69b9))
+* realm users tab functionality ([7bd9733](https://github.com/ba-itsys/keycloak-cassandra-extension/commit/7bd97337ef7b883f631fdb90df39448eb88a79f2)), closes [#338](https://github.com/ba-itsys/keycloak-cassandra-extension/issues/338) [#339](https://github.com/ba-itsys/keycloak-cassandra-extension/issues/339)
+* treat components without parent as realm components ([91091c6](https://github.com/ba-itsys/keycloak-cassandra-extension/commit/91091c6542d6c581d2b2aea1108538aea6706d3f))
+
+
+### Dependencies
+
+* **deps:** bump org.slf4j:slf4j-nop from 2.0.19 to 2.0.20 ([4dad72a](https://github.com/ba-itsys/keycloak-cassandra-extension/commit/4dad72a81efc9846e0b09a91cc812a3741183db2))
+
 ## [6.1.3](https://github.com/ba-itsys/keycloak-cassandra-extension/compare/v6.1.2...v6.1.3) (2026-09-25)
 
 
