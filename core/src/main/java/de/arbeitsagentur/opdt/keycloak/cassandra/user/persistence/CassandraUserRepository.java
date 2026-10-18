@@ -468,9 +468,12 @@ public class CassandraUserRepository extends TransactionalRepository<User, UserD
 
     @Override
     public boolean deleteIssuedVerifiableCredential(String userId, String id) {
-        boolean deleted = dao.deleteIssuedVerifiableCredential(userId, id);
+        if (dao.findIssuedVerifiableCredential(userId, id) == null) {
+            return false;
+        }
+        dao.deleteIssuedVerifiableCredential(userId, id);
         dao.deleteIssuedVerifiableCredentialPointer(id);
-        return deleted;
+        return true;
     }
 
     @Override

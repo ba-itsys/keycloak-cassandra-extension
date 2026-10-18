@@ -523,6 +523,17 @@ public class ManagedCompositeCassandraRepository implements CompositeRepository 
         return this.authSessionRepository.findRootAuthSessionById(id);
     }
 
+    @L1Cached(cacheName = AUTH_SESSION_CACHE)
+    public List<String> findRootAuthSessionIdsByUser(String realmId, String userId) {
+        return this.authSessionRepository.findRootAuthSessionIdsByUser(realmId, userId);
+    }
+
+    @L1Cached(cacheName = AUTH_SESSION_CACHE)
+    @InvalidateCache
+    public void deleteRootAuthSessionUserIndex(String realmId, String userId, String rootSessionId) {
+        this.authSessionRepository.deleteRootAuthSessionUserIndex(realmId, userId, rootSessionId);
+    }
+
     @L1Cached(cacheName = LOGIN_FAILURE_CACHE)
     @InvalidateCache
     public void insertOrUpdate(LoginFailure loginFailure) {

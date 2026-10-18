@@ -1335,6 +1335,8 @@ public class CassandraRealmAdapter extends TransactionalModelAdapter<Realm> impl
                     oldPS.setLinkOnly(identityProvider.isLinkOnly());
                     oldPS.setAddReadTokenRoleOnCreate(identityProvider.isAddReadTokenRoleOnCreate());
                     oldPS.setAuthenticateByDefault(identityProvider.isAuthenticateByDefault());
+                    oldPS.setHideOnLogin(identityProvider.isHideOnLogin());
+                    oldPS.setOrganizationIds(new LinkedHashSet<>(identityProvider.getOrganizationIds()));
                     oldPS.setConfig(
                             identityProvider.getConfig() == null ? null : new HashMap<>(identityProvider.getConfig()));
                 });

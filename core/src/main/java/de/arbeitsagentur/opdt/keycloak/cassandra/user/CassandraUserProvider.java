@@ -838,6 +838,12 @@ public class CassandraUserProvider extends TransactionalProvider<User, Cassandra
     }
 
     @Override
+    public boolean removeIssuedVerifiableCredential(String userId, String credentialId) {
+        log.tracef("removeIssuedVerifiableCredential(%s, %s)%s", userId, credentialId, getShortStackTrace());
+        return userRepository.deleteIssuedVerifiableCredential(userId, credentialId);
+    }
+
+    @Override
     public void removeExpiredIssuedVerifiableCredentials() {
         // Expiry is handled by Cassandra TTL, so there is nothing to sweep.
     }

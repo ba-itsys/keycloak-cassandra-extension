@@ -21,6 +21,7 @@ import java.util.Map;
 import org.keycloak.models.ClientModel;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.RealmModel;
+import org.keycloak.models.UserModel;
 import org.keycloak.sessions.AuthenticationSessionCompoundId;
 import org.keycloak.sessions.AuthenticationSessionProvider;
 import org.keycloak.sessions.RootAuthenticationSessionModel;
@@ -64,6 +65,13 @@ public class RoutedAuthenticationSessionProvider extends ConditionalAreaRouter<A
     @Override
     public void removeExpired(RealmModel realm) {
         select(realm).removeExpired(realm);
+    }
+
+    @Override
+    public void removeRootAuthenticationSessionsByAuthenticatedUser(
+            RealmModel realm, UserModel user, String rootAuthenticationSessionIdToKeep) {
+        select(realm)
+                .removeRootAuthenticationSessionsByAuthenticatedUser(realm, user, rootAuthenticationSessionIdToKeep);
     }
 
     @Override

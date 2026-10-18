@@ -35,4 +35,8 @@ public interface AuthSessionRepository {
     List<AuthenticationSession> findAuthSessionsByParentSessionId(String parentSessionId);
 
     RootAuthenticationSession findRootAuthSessionById(String id);
+
+    List<String> findRootAuthSessionIdsByUser(String realmId, String userId);
+
+    void deleteRootAuthSessionUserIndex(String realmId, String userId, String rootSessionId);
 }

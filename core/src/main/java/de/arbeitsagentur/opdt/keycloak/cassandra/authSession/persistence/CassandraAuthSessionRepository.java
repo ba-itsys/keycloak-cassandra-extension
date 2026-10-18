@@ -17,6 +17,7 @@ package de.arbeitsagentur.opdt.keycloak.cassandra.authSession.persistence;
 
 import de.arbeitsagentur.opdt.keycloak.cassandra.authSession.persistence.entities.AuthenticationSession;
 import de.arbeitsagentur.opdt.keycloak.cassandra.authSession.persistence.entities.RootAuthenticationSession;
+import de.arbeitsagentur.opdt.keycloak.cassandra.authSession.persistence.entities.RootAuthenticationSessionByUser;
 import de.arbeitsagentur.opdt.keycloak.common.TimeAdapter;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -42,12 +43,22 @@ public class CassandraAuthSessionRepository implements AuthSessionRepository {
 
     @Override
     public void insertOrUpdate(AuthenticationSession session, RootAuthenticationSession parent) {
+        RootAuthenticationSessionByUser userIndex = session.getUserId() == null
+                ? null
+                : new RootAuthenticationSessionByUser(parent.getRealmId(), session.getUserId(), parent.getId());
         if (parent.getExpiration() == null) {
             dao.insertOrUpdate(session);
-        } else {
-            int ttl = TimeAdapter.fromLongWithTimeInSecondsToIntegerWithTimeInSeconds(
-                    TimeAdapter.fromMilliSecondsToSeconds(parent.getExpiration() - Time.currentTimeMillis()));
-            dao.insertOrUpdate(session, ttl);
+            if (userIndex != null) {
+                dao.insert(userIndex);
+            }
+            return;
+        }
+
+        int ttl = TimeAdapter.fromLongWithTimeInSecondsToIntegerWithTimeInSeconds(
+                TimeAdapter.fromMilliSecondsToSeconds(parent.getExpiration() - Time.currentTimeMillis()));
+        dao.insertOrUpdate(session, ttl);
+        if (userIndex != null) {
+            dao.insert(userIndex, ttl);
         }
     }
 
@@ -81,5 +92,17 @@ public class CassandraAuthSessionRepository implements AuthSessionRepository {
     @Override
     public RootAuthenticationSession findRootAuthSessionById(String id) {
         return dao.findById(id);
+    }
+
+    @Override
+    public List<String> findRootAuthSessionIdsByUser(String realmId, String userId) {
+        return dao.findRootAuthSessionsByUser(realmId, userId).all().stream()
+                .map(RootAuthenticationSessionByUser::getRootSessionId)
+                .toList();
+    }
+
+    @Override
+    public void deleteRootAuthSessionUserIndex(String realmId, String userId, String rootSessionId) {
+        dao.delete(new RootAuthenticationSessionByUser(realmId, userId, rootSessionId));
     }
 }

@@ -32,14 +32,18 @@ public class CassandraLegacyExportImportManager extends DefaultExportImportManag
                 .users()
                 .addUser(newRealm, userRep.getId(), userRep.getUsername(), false, false);
         user.setEnabled(userRep.isEnabled() != null && userRep.isEnabled());
-        user.setCreatedTimestamp(userRep.getCreatedTimestamp());
+        if (userRep.getCreatedTimestamp() != null) {
+            user.setCreatedTimestamp(userRep.getCreatedTimestamp());
+        }
         user.setEmail(userRep.getEmail());
         if (userRep.isEmailVerified() != null) user.setEmailVerified(userRep.isEmailVerified());
         user.setFirstName(userRep.getFirstName());
         user.setLastName(userRep.getLastName());
         user.setFederationLink(userRep.getFederationLink());
         if (userRep.getAttributes() != null) {
-            for (Map.Entry<String, List<String>> entry : userRep.getAttributes().entrySet()) {
+            for (Map.Entry<String, List<String>> entry : userRep.getAttributes().entrySet().stream()
+                    .sorted(Map.Entry.comparingByKey())
+                    .toList()) {
                 List<String> value = entry.getValue();
                 if (value != null) {
                     user.setAttribute(entry.getKey(), new ArrayList<>(value));
@@ -53,7 +57,7 @@ public class CassandraLegacyExportImportManager extends DefaultExportImportManag
         }
         createCredentials(userRep, session, newRealm, user, false);
         createFederatedIdentities(userRep, session, newRealm, user);
-        createRoleMappings(userRep, user, newRealm);
+        createRoleMappings(session, userRep, user, newRealm);
         if (userRep.getClientConsents() != null) {
             for (UserConsentRepresentation consentRep : userRep.getClientConsents()) {
                 UserConsentModel consentModel = RepresentationToModel.toModel(newRealm, consentRep, session);
@@ -64,6 +68,9 @@ public class CassandraLegacyExportImportManager extends DefaultExportImportManag
         if (userRep.getNotBefore() != null) {
             session.users().setNotBeforeForUser(newRealm, user, userRep.getNotBefore());
         }
+
+        createVerifiableCredentials(userRep, session, user);
+        createIssuedVerifiableCredentials(userRep, session, user);
 
         if (userRep.getServiceAccountClientId() != null) {
             String clientId = userRep.getServiceAccountClientId();

@@ -41,6 +41,7 @@ public class VerifiableCredentialModelTest extends CassandraModelTest {
 
     private static final String REALM_NAME = "vc";
     private static final String USER_ID = "vc-user";
+    private static final String OTHER_USER_ID = "vc-other-user";
     private static final String CLIENT_SCOPE_ID = "vc-scope-1";
 
     @InjectRealm(ref = REALM_NAME, lifecycle = LifeCycle.METHOD, config = VcRealmConfig.class)
@@ -157,6 +158,46 @@ public class VerifiableCredentialModelTest extends CassandraModelTest {
     }
 
     @TestOnServer
+    public void testRemoveIssuedVerifiableCredentialChecksOwner(KeycloakSession testSession) {
+        String issuedId = withRealm(testSession, REALM_NAME, (session, realm) -> {
+            UserVerifiableCredentialModel model = new UserVerifiableCredentialModel(null, CLIENT_SCOPE_ID);
+            model.setUserAttributes(new HashMap<>());
+            String vcId =
+                    session.users().addVerifiableCredential(USER_ID, model).getId();
+            return session.users()
+                    .addIssuedVerifiableCredential(new IssuedVerifiableCredentialModel(USER_ID, vcId, "vc-client"))
+                    .getId();
+        });
+
+        withRealm(testSession, REALM_NAME, (session, realm) -> {
+            Assert.assertFalse(session.users().removeIssuedVerifiableCredential(OTHER_USER_ID, issuedId));
+            Assert.assertFalse(session.users().removeIssuedVerifiableCredential(USER_ID, "unknown-id"));
+            return null;
+        });
+
+        withRealm(testSession, REALM_NAME, (session, realm) -> {
+            assertThat(
+                    session.users()
+                            .getIssuedVerifiableCredentialsStreamByUser(USER_ID)
+                            .map(IssuedVerifiableCredentialModel::getId)
+                            .toList(),
+                    Matchers.contains(issuedId));
+            Assert.assertTrue(session.users().removeIssuedVerifiableCredential(USER_ID, issuedId));
+            return null;
+        });
+
+        withRealm(testSession, REALM_NAME, (session, realm) -> {
+            assertThat(
+                    session.users()
+                            .getIssuedVerifiableCredentialsStreamByUser(USER_ID)
+                            .toList(),
+                    Matchers.empty());
+            Assert.assertFalse(session.users().removeIssuedVerifiableCredential(issuedId));
+            return null;
+        });
+    }
+
+    @TestOnServer
     public void testRemoveVerifiableCredentialCascadesToIssued(KeycloakSession testSession) {
         withRealm(testSession, REALM_NAME, (session, realm) -> {
             UserVerifiableCredentialModel model = new UserVerifiableCredentialModel(null, CLIENT_SCOPE_ID);
@@ -224,7 +265,12 @@ public class VerifiableCredentialModelTest extends CassandraModelTest {
     public static class VcRealmConfig implements RealmConfig {
         @Override
         public RealmBuilder configure(RealmBuilder realm) {
-            realm.users(UserBuilder.create().username(USER_ID).id(USER_ID).email("vc-user@example.com"));
+            realm.users(
+                    UserBuilder.create().username(USER_ID).id(USER_ID).email("vc-user@example.com"),
+                    UserBuilder.create()
+                            .username(OTHER_USER_ID)
+                            .id(OTHER_USER_ID)
+                            .email("vc-other-user@example.com"));
             return realm;
         }
     }

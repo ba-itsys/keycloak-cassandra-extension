@@ -4,8 +4,12 @@ import java.util.Arrays;
 import java.util.Comparator;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import lombok.extern.jbosslog.JBossLog;
+import org.keycloak.broker.provider.util.IdentityProviderTypeUtil;
 import org.keycloak.models.*;
 import org.keycloak.utils.StringUtil;
 
@@ -56,101 +60,106 @@ public class CassandraIdentityProviderStorageProvider implements IdentityProvide
 
     @Override
     public Stream<IdentityProviderModel> getAllStream(
-            Map<String, String> options, Integer firstResult, Integer maxResults) {
-        int first = firstResult == null || firstResult < 0 ? 0 : firstResult;
-        int resultCount = maxResults == null || maxResults < 0 ? Integer.MAX_VALUE : maxResults;
-
-        return getRealm()
-                .getIdentityProvidersStream()
-                .filter(idp -> {
-                    if (options == null || options.isEmpty()) {
-                        return true;
-                    }
-
-                    if (options.containsKey(IdentityProviderModel.ORGANIZATION_ID)) {
-                        String organizationId = options.get(IdentityProviderModel.ORGANIZATION_ID);
-                        if (!Objects.equals(idp.getOrganizationId(), organizationId)) {
-                            return false;
-                        }
-                    }
-
-                    if (options.containsKey(IdentityProviderModel.ORGANIZATION_ID_NOT_NULL)) {
-                        if (idp.getOrganizationId() == null) {
-                            return false;
-                        }
-                    }
-
-                    if (options.containsKey(IdentityProviderModel.ENABLED)) {
-                        boolean enabled = Boolean.parseBoolean(options.get(IdentityProviderModel.ENABLED));
-                        if (idp.isEnabled() != enabled) {
-                            return false;
-                        }
-                    }
-
-                    if (options.containsKey(IdentityProviderModel.HIDE_ON_LOGIN)) {
-                        boolean hideOnLogin = Boolean.parseBoolean(options.get(IdentityProviderModel.HIDE_ON_LOGIN));
-                        if (idp.isHideOnLogin() != hideOnLogin) {
-                            return false;
-                        }
-                    }
-
-                    if (options.containsKey(IdentityProviderModel.LINK_ONLY)) {
-                        boolean linkOnly = Boolean.parseBoolean(options.get(IdentityProviderModel.LINK_ONLY));
-                        if (idp.isLinkOnly() != linkOnly) {
-                            return false;
-                        }
-                    }
-
-                    if (options.containsKey(IdentityProviderModel.ALIAS)) {
-                        String alias = options.get(IdentityProviderModel.ALIAS);
-                        if (!idp.getAlias().equals(alias)) {
-                            return false;
-                        }
-                    }
-
-                    if (options.containsKey(IdentityProviderModel.ALIAS_NOT_IN)) {
-                        String aliasNotIn = options.get(IdentityProviderModel.ALIAS_NOT_IN);
-                        if (Arrays.stream(aliasNotIn.split(","))
-                                .anyMatch(alias -> idp.getAlias().equals(alias))) {
-                            return false;
-                        }
-                    }
-
-                    if (options.containsKey(IdentityProviderModel.SEARCH)) {
-                        String search = options.get(IdentityProviderModel.SEARCH);
-                        if (!StringUtil.isNullOrEmpty(search) && !idp.getAlias().contains(search)) {
-                            return false;
-                        }
-                    }
-
-                    return true;
-                })
-                .sorted(Comparator.comparing(IdentityProviderModel::getAlias))
-                .skip(first)
-                .limit(resultCount);
-    }
-
-    @Override
-    public Stream<IdentityProviderModel> getAllStream(
             IdentityProviderQuery query, Integer firstResult, Integer maxResults) {
-        // Delegate to existing method - filters will be applied by the query predicate in calling code
-        return getAllStream(Map.of(), firstResult, maxResults);
+        Set<String> includedProviderIds = includedProviderIds(query);
+        Map<String, String> options = query.getOptions() == null ? Map.of() : query.getOptions();
+
+        Stream<IdentityProviderModel> result = getRealm()
+                .getIdentityProvidersStream()
+                .filter(idp -> includedProviderIds == null || includedProviderIds.contains(idp.getProviderId()))
+                .filter(idp -> options.entrySet().stream()
+                        .allMatch(option -> matches(idp, option.getKey(), option.getValue())))
+                .sorted(Comparator.comparing(IdentityProviderModel::getAlias));
+        return paginate(result, firstResult, maxResults);
     }
 
     @Override
     public Stream<String> getByFlow(String flowId, String search, Integer firstResult, Integer maxResults) {
-        int first = firstResult == null || firstResult < 0 ? 0 : firstResult;
-        int resultCount = maxResults == null || maxResults < 0 ? Integer.MAX_VALUE : maxResults;
-
-        return getRealm()
+        Stream<String> result = getRealm()
                 .getIdentityProvidersStream()
-                .filter(idp -> search == null || idp.getAlias().contains(search.replace("*", "")))
-                .filter(idp -> Objects.equals(idp.getFirstBrokerLoginFlowId(), flowId)
+                .filter(idp -> StringUtil.isBlank(flowId)
+                        || Objects.equals(idp.getFirstBrokerLoginFlowId(), flowId)
                         || Objects.equals(idp.getPostBrokerLoginFlowId(), flowId))
+                .filter(idp -> StringUtil.isBlank(search) || matchesAliasSearch(idp, search))
                 .sorted(Comparator.comparing(IdentityProviderModel::getAlias))
-                .skip(first)
-                .limit(resultCount)
                 .map(IdentityProviderModel::getAlias);
+        return paginate(result, firstResult, maxResults);
+    }
+
+    private Set<String> includedProviderIds(IdentityProviderQuery query) {
+        if (query.getType() != null && query.getType() != IdentityProviderType.ANY) {
+            return Set.copyOf(IdentityProviderTypeUtil.listFactoriesByType(session, query.getType()));
+        }
+        if (query.getCapability() != null) {
+            return Set.copyOf(IdentityProviderTypeUtil.listFactoriesByCapability(session, query.getCapability()));
+        }
+        return null;
+    }
+
+    private static boolean matches(IdentityProviderModel idp, String key, String value) {
+        if (StringUtil.isBlank(key)) {
+            return true;
+        }
+        return switch (key) {
+            case IdentityProviderModel.AUTHENTICATE_BY_DEFAULT ->
+                Boolean.parseBoolean(value) == Boolean.TRUE.equals(idp.isAuthenticateByDefault());
+            case IdentityProviderModel.ENABLED -> Boolean.parseBoolean(value) == idp.isEnabled();
+            case IdentityProviderModel.HIDE_ON_LOGIN ->
+                Boolean.parseBoolean(value) == Boolean.TRUE.equals(idp.isHideOnLogin());
+            case IdentityProviderModel.LINK_ONLY ->
+                Boolean.parseBoolean(value) == Boolean.TRUE.equals(idp.isLinkOnly());
+            case IdentityProviderModel.ALIAS -> matchesOptional(idp.getAlias(), value);
+            case IdentityProviderModel.FIRST_BROKER_LOGIN_FLOW_ID ->
+                matchesOptional(idp.getFirstBrokerLoginFlowId(), value);
+            case IdentityProviderModel.POST_BROKER_LOGIN_FLOW_ID ->
+                matchesOptional(idp.getPostBrokerLoginFlowId(), value);
+            case IdentityProviderModel.ORGANIZATION_ID ->
+                StringUtil.isBlank(value) ? !idp.hasOrganization() : idp.isLinkedToOrganization(value);
+            case IdentityProviderModel.ORGANIZATION_ID_NOT_NULL -> idp.hasOrganization();
+            case IdentityProviderModel.SEARCH -> StringUtil.isBlank(value) || matchesAliasSearch(idp, value);
+            case IdentityProviderModel.ALIAS_NOT_IN ->
+                StringUtil.isBlank(value) || !Arrays.asList(value.split(",")).contains(idp.getAlias());
+            default -> matchesConfig(idp, key, value);
+        };
+    }
+
+    private static boolean matchesOptional(String actual, String expected) {
+        return StringUtil.isBlank(expected) ? actual == null : expected.equals(actual);
+    }
+
+    private static boolean matchesConfig(IdentityProviderModel idp, String key, String value) {
+        String actual = idp.getConfig() == null ? null : idp.getConfig().get(key);
+        if (Objects.equals(actual, value)) {
+            return true;
+        }
+        return IdentityProviderModel.SHOW_IN_ACCOUNT_CONSOLE.equals(key)
+                && IdentityProviderShowInAccountConsole.ALWAYS.name().equals(value)
+                && actual == null;
+    }
+
+    // Same semantics as the JPA provider: "quoted" is exact, '*' is a wildcard, otherwise a prefix match
+    private static boolean matchesAliasSearch(IdentityProviderModel idp, String search) {
+        if (search.length() > 1 && search.startsWith("\"") && search.endsWith("\"")) {
+            String exact = search.substring(1, search.length() - 1);
+            return exact.equals(idp.getAlias()) || exact.equals(idp.getDisplayName());
+        }
+        String regex =
+                Arrays.stream(search.split("\\*", -1)).map(Pattern::quote).collect(Collectors.joining(".*"));
+        Pattern pattern =
+                Pattern.compile(regex + ".*", Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE | Pattern.DOTALL);
+        return Stream.of(idp.getAlias(), idp.getDisplayName())
+                .filter(Objects::nonNull)
+                .anyMatch(candidate -> pattern.matcher(candidate).matches());
+    }
+
+    private static <T> Stream<T> paginate(Stream<T> stream, Integer firstResult, Integer maxResults) {
+        if (firstResult != null && firstResult > 0) {
+            stream = stream.skip(firstResult);
+        }
+        if (maxResults != null && maxResults >= 0) {
+            stream = stream.limit(maxResults);
+        }
+        return stream;
     }
 
     @Override

@@ -36,6 +36,7 @@ import org.keycloak.models.ClientModel;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.ModelDuplicateException;
 import org.keycloak.models.RealmModel;
+import org.keycloak.models.UserModel;
 import org.keycloak.models.utils.KeycloakModelUtils;
 import org.keycloak.sessions.AuthenticationSessionCompoundId;
 import org.keycloak.sessions.AuthenticationSessionProvider;
@@ -150,6 +151,34 @@ public class CassandraAuthSessionProvider implements AuthenticationSessionProvid
         log.tracef("removeExpired(%s)%s", realm, getShortStackTrace());
         log.warnf(
                 "Clearing expired entities should not be triggered manually. It is responsibility of the store to clear these.");
+    }
+
+    @Override
+    public void removeRootAuthenticationSessionsByAuthenticatedUser(
+            RealmModel realm, UserModel user, String rootAuthenticationSessionIdToKeep) {
+        Objects.requireNonNull(realm, "The provided realm can't be null!");
+        Objects.requireNonNull(user, "The provided user can't be null!");
+        log.tracef(
+                "removeRootAuthenticationSessionsByAuthenticatedUser(%s, %s, %s)%s",
+                realm.getName(), user.getId(), rootAuthenticationSessionIdToKeep, getShortStackTrace());
+
+        for (String rootSessionId : authSessionRepository.findRootAuthSessionIdsByUser(realm.getId(), user.getId())) {
+            if (Objects.equals(rootSessionId, rootAuthenticationSessionIdToKeep)) {
+                continue;
+            }
+            // The index may be stale when the authenticated user of the session changed
+            boolean authenticatedByUser =
+                    authSessionRepository.findAuthSessionsByParentSessionId(rootSessionId).stream()
+                            .anyMatch(authSession -> Objects.equals(authSession.getUserId(), user.getId()));
+            if (authenticatedByUser) {
+                authSessionRepository.deleteRootAuthSession(rootSessionId);
+                CassandraRootAuthSessionAdapter loaded = sessionModels.remove(rootSessionId);
+                if (loaded != null) {
+                    loaded.markDeleted();
+                }
+            }
+            authSessionRepository.deleteRootAuthSessionUserIndex(realm.getId(), user.getId(), rootSessionId);
+        }
     }
 
     @Override

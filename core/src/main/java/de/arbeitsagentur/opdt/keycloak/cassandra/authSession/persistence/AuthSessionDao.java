@@ -20,6 +20,7 @@ import com.datastax.oss.driver.api.mapper.annotations.*;
 import de.arbeitsagentur.opdt.keycloak.cassandra.BaseDao;
 import de.arbeitsagentur.opdt.keycloak.cassandra.authSession.persistence.entities.AuthenticationSession;
 import de.arbeitsagentur.opdt.keycloak.cassandra.authSession.persistence.entities.RootAuthenticationSession;
+import de.arbeitsagentur.opdt.keycloak.cassandra.authSession.persistence.entities.RootAuthenticationSessionByUser;
 
 @Dao
 public interface AuthSessionDao extends BaseDao {
@@ -58,6 +59,22 @@ public interface AuthSessionDao extends BaseDao {
     @Select(customWhereClause = "parent_session_id = :parentSessionId")
     @StatementAttributes(executionProfileName = "read")
     PagingIterable<AuthenticationSession> findByParentSessionId(String parentSessionId);
+
+    @Insert(ttl = ":ttl")
+    @StatementAttributes(executionProfileName = "write")
+    void insert(RootAuthenticationSessionByUser index, int ttl);
+
+    @Insert
+    @StatementAttributes(executionProfileName = "write")
+    void insert(RootAuthenticationSessionByUser index);
+
+    @Select(customWhereClause = "realm_id = :realmId AND user_id = :userId")
+    @StatementAttributes(executionProfileName = "read")
+    PagingIterable<RootAuthenticationSessionByUser> findRootAuthSessionsByUser(String realmId, String userId);
+
+    @Delete
+    @StatementAttributes(executionProfileName = "write")
+    void delete(RootAuthenticationSessionByUser index);
 
     @Select(customWhereClause = "id = :id")
     @StatementAttributes(executionProfileName = "read")

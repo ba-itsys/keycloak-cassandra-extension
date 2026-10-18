@@ -38,6 +38,7 @@ import org.keycloak.models.*;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.light.LightweightUserAdapter;
 import org.keycloak.sessions.AuthenticationSessionModel;
+import org.keycloak.sessions.AuthenticationSessionProvider;
 import org.keycloak.sessions.CommonClientSessionModel;
 import org.keycloak.sessions.RootAuthenticationSessionModel;
 import org.keycloak.testframework.annotations.InjectRealm;
@@ -556,6 +557,70 @@ public class AuthenticationSessionTest extends CassandraModelTest {
 
             return null;
         });
+    }
+
+    @TestOnServer
+    public void testRemoveRootAuthenticationSessionsByAuthenticatedUser(KeycloakSession testSession) {
+        RootSessionIds ids = withRealm(testSession, REALM_NAME, (session, realm) -> {
+            UserModel alice = session.users().addUser(realm, "alice");
+            UserModel bob = session.users().addUser(realm, "bob");
+            ClientModel client = realm.getClientByClientId("test-app");
+            return new RootSessionIds(
+                    createRootAuthSession(session, realm, client, alice),
+                    createRootAuthSession(session, realm, client, alice),
+                    createRootAuthSession(session, realm, client, bob),
+                    createRootAuthSession(session, realm, client, null),
+                    createRootAuthSession(session, realm, client, alice));
+        });
+
+        withRealm(testSession, REALM_NAME, (session, realm) -> {
+            UserModel bob = session.users().getUserByUsername(realm, "bob");
+            session.authenticationSessions()
+                    .getRootAuthenticationSession(realm, ids.switchedToOtherUser())
+                    .getAuthenticationSessions()
+                    .values()
+                    .forEach(authSession -> authSession.setAuthenticatedUser(bob));
+            return null;
+        });
+
+        withRealm(testSession, REALM_NAME, (session, realm) -> {
+            UserModel alice = session.users().getUserByUsername(realm, "alice");
+            session.authenticationSessions()
+                    .removeRootAuthenticationSessionsByAuthenticatedUser(realm, alice, ids.kept());
+            return null;
+        });
+
+        withRealm(testSession, REALM_NAME, (session, realm) -> {
+            AuthenticationSessionProvider provider = session.authenticationSessions();
+            Assert.assertNotNull(provider.getRootAuthenticationSession(realm, ids.kept()));
+            assertNull(provider.getRootAuthenticationSession(realm, ids.removed()));
+            Assert.assertNotNull(provider.getRootAuthenticationSession(realm, ids.otherUser()));
+            Assert.assertNotNull(provider.getRootAuthenticationSession(realm, ids.unauthenticated()));
+            Assert.assertNotNull(provider.getRootAuthenticationSession(realm, ids.switchedToOtherUser()));
+
+            UserModel alice = session.users().getUserByUsername(realm, "alice");
+            provider.removeRootAuthenticationSessionsByAuthenticatedUser(realm, alice, null);
+            return null;
+        });
+
+        withRealm(testSession, REALM_NAME, (session, realm) -> {
+            assertNull(session.authenticationSessions().getRootAuthenticationSession(realm, ids.kept()));
+            Assert.assertNotNull(session.authenticationSessions().getRootAuthenticationSession(realm, ids.otherUser()));
+            return null;
+        });
+    }
+
+    private record RootSessionIds(
+            String kept, String removed, String otherUser, String unauthenticated, String switchedToOtherUser) {}
+
+    private static String createRootAuthSession(
+            KeycloakSession session, RealmModel realm, ClientModel client, UserModel user) {
+        RootAuthenticationSessionModel root = session.authenticationSessions().createRootAuthenticationSession(realm);
+        AuthenticationSessionModel authSession = root.createAuthenticationSession(client);
+        if (user != null) {
+            authSession.setAuthenticatedUser(user);
+        }
+        return root.getId();
     }
 
     public static class AuthenticationSessionRealmConfig implements RealmConfig {

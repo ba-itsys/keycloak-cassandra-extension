@@ -129,6 +129,11 @@ public class RoutedUserProvider extends ConditionalAreaRouter<UserProvider> impl
     }
 
     @Override
+    public boolean removeIssuedVerifiableCredential(String userId, String credentialId) {
+        return select(null).removeIssuedVerifiableCredential(userId, credentialId);
+    }
+
+    @Override
     public boolean removeVerifiableCredential(String userId, String clientScopeId) {
         return select(null).removeVerifiableCredential(userId, clientScopeId);
     }
