@@ -1,5 +1,15 @@
 # Changelog
 
+## [6.2.1](https://github.com/ba-itsys/keycloak-cassandra-extension/compare/v6.2.0...v6.2.1) (2026-10-30)
+
+
+### Dependencies
+
+* **deps-dev:** bump asm.version from 9.10.1 to 9.11.1 ([0dbd4c4](https://github.com/ba-itsys/keycloak-cassandra-extension/commit/0dbd4c4f24fe5af458f741070ace2fa4b1df0a8f))
+* **deps-dev:** bump org.apache.maven.plugins:maven-surefire-plugin ([cef5a30](https://github.com/ba-itsys/keycloak-cassandra-extension/commit/cef5a30ce0d5e8f328556f109a45c7daac0e19a3))
+* **deps:** bump cassandra-java-driver.version from 4.19.3 to 4.19.4 ([32103b6](https://github.com/ba-itsys/keycloak-cassandra-extension/commit/32103b6903a74980b96b7bf5144a40ed6a88568d))
+* **deps:** bump org.jacoco:jacoco-maven-plugin from 0.8.15 to 0.8.16 ([7a903bc](https://github.com/ba-itsys/keycloak-cassandra-extension/commit/7a903bc2b24fa41b0212a7a781fbe3782f6900e8))
+
 ## [6.2.0](https://github.com/ba-itsys/keycloak-cassandra-extension/compare/v6.1.3...v6.2.0) (2026-10-19)
 
 
