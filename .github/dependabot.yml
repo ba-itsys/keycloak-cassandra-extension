@@ -12,6 +12,9 @@ updates:
     commit-message:
       prefix: "deps" # to trigger a new release (release-please)
       include: "scope"
+    groups:
+      keycloak:
+        patterns: [ "org.keycloak*" ]
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
