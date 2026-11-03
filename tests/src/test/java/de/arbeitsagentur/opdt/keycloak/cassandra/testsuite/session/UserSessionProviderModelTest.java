@@ -511,9 +511,11 @@ public class UserSessionProviderModelTest extends CassandraModelTest {
         withRealm(testSession, REALM_NAME, (s, r) -> {
             clientSessionsKept.putAll(s.sessions()
                     .getUserSessionsStream(r, s.users().getUserByUsername(r, "user2"))
-                    .collect(Collectors.toMap(UserSessionModel::getId, model -> model.getAuthenticatedClientSessions()
-                            .keySet()
-                            .size())));
+                    .collect(Collectors.toMap(
+                            UserSessionModel::getId,
+                            model -> model.getAuthenticatedClientSessions()
+                                    .keySet()
+                                    .size())));
 
             s.sessions().removeUserSessions(r, s.users().getUserByUsername(r, "user1"));
             return null;
@@ -954,8 +956,11 @@ public class UserSessionProviderModelTest extends CassandraModelTest {
             assertThat(brokerSessions.get(0).getBrokerUserId(), is("brokerUserId"));
 
             UserSessionModel sessionByPredicate = s.sessions()
-                    .getUserSessionWithPredicate(realm, session.getId(), false, s2 -> s2.getBrokerUserId()
-                            .equals("brokerUserId"));
+                    .getUserSessionWithPredicate(
+                            realm,
+                            session.getId(),
+                            false,
+                            s2 -> s2.getBrokerUserId().equals("brokerUserId"));
             assertThat(sessionByPredicate.getBrokerSessionId(), is("brokerSession"));
             assertThat(sessionByPredicate.getBrokerUserId(), is("brokerUserId"));
 
@@ -977,8 +982,11 @@ public class UserSessionProviderModelTest extends CassandraModelTest {
             assertThat(brokerSessions.get(0).getBrokerUserId(), is("brokerUserId"));
 
             UserSessionModel sessionByPredicate = s.sessions()
-                    .getUserSessionWithPredicate(realm, session.getId(), true, s2 -> s2.getBrokerUserId()
-                            .equals("brokerUserId"));
+                    .getUserSessionWithPredicate(
+                            realm,
+                            session.getId(),
+                            true,
+                            s2 -> s2.getBrokerUserId().equals("brokerUserId"));
             assertThat(sessionByPredicate.getBrokerSessionId(), is("brokerSession"));
             assertThat(sessionByPredicate.getBrokerUserId(), is("brokerUserId"));
 
@@ -1041,17 +1049,20 @@ public class UserSessionProviderModelTest extends CassandraModelTest {
     @TestOnServer
     public void testRemoveSessions(KeycloakSession testSession) {
 
-        String sessionId = withRealm(testSession, REALM_NAME, (s, realm) -> s.sessions()
-                .createUserSession(
-                        realm,
-                        s.users().getUserByUsername(realm, "user1"),
-                        "user1",
-                        "127.0.0.2",
-                        "form",
-                        true,
-                        null,
-                        null)
-                .getId());
+        String sessionId = withRealm(
+                testSession,
+                REALM_NAME,
+                (s, realm) -> s.sessions()
+                        .createUserSession(
+                                realm,
+                                s.users().getUserByUsername(realm, "user1"),
+                                "user1",
+                                "127.0.0.2",
+                                "form",
+                                true,
+                                null,
+                                null)
+                        .getId());
         withRealm(testSession, REALM_NAME, (s, realm) -> s.clients().addClient(realm, "clientId"));
 
         withRealm(testSession, REALM_NAME, (s, realm) -> {

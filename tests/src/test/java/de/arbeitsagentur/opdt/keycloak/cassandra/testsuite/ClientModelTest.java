@@ -72,8 +72,10 @@ public class ClientModelTest extends CassandraModelTest {
 
         // Find by id
         {
-            ClientModel model = withRealm(testSession, REALM_NAME, (session, realm) -> session.clients()
-                    .getClientById(realm, originalModel.getId()));
+            ClientModel model = withRealm(
+                    testSession,
+                    REALM_NAME,
+                    (session, realm) -> session.clients().getClientById(realm, originalModel.getId()));
             assertThat(model, notNullValue());
             assertThat(model.getId(), is(equalTo(model.getId())));
             assertThat(model.getClientId(), is(equalTo("myClientId")));
@@ -81,8 +83,10 @@ public class ClientModelTest extends CassandraModelTest {
 
         // Find by clientId
         {
-            ClientModel model = withRealm(testSession, REALM_NAME, (session, realm) -> session.clients()
-                    .getClientByClientId(realm, "myClientId"));
+            ClientModel model = withRealm(
+                    testSession,
+                    REALM_NAME,
+                    (session, realm) -> session.clients().getClientByClientId(realm, "myClientId"));
             assertThat(model, notNullValue());
             assertThat(model.getId(), is(equalTo(originalModel.getId())));
             assertThat(model.getClientId(), is(equalTo("myClientId")));
@@ -137,9 +141,10 @@ public class ClientModelTest extends CassandraModelTest {
 
         // using Boolean operand
         {
-            Map<ClientModel, Set<String>> allRedirectUrisOfEnabledClients =
-                    withRealm(testSession, REALM_NAME, (session, realm) -> session.clients()
-                            .getAllRedirectUrisOfEnabledClients(realm));
+            Map<ClientModel, Set<String>> allRedirectUrisOfEnabledClients = withRealm(
+                    testSession,
+                    REALM_NAME,
+                    (session, realm) -> session.clients().getAllRedirectUrisOfEnabledClients(realm));
             List<ClientModel> clientsWithRedirect = allRedirectUrisOfEnabledClients.entrySet().stream()
                     .filter(entry -> entry.getValue().contains("http://www.redirecturi.com"))
                     .map(Map.Entry::getKey)
@@ -157,9 +162,12 @@ public class ClientModelTest extends CassandraModelTest {
                 return clientById;
             });
 
-            String browser = withRealm(testSession, REALM_NAME, (session, realm) -> session.clients()
-                    .getClientById(realm, originalModel.getId())
-                    .getAuthenticationFlowBindingOverride("browser"));
+            String browser = withRealm(
+                    testSession,
+                    REALM_NAME,
+                    (session, realm) -> session.clients()
+                            .getClientById(realm, originalModel.getId())
+                            .getAuthenticationFlowBindingOverride("browser"));
             assertThat(browser, is(equalTo("customFlowId")));
         }
     }
@@ -742,8 +750,10 @@ public class ClientModelTest extends CassandraModelTest {
     @TestOnServer
     public void testProtocolMappers(KeycloakSession testSession) {
 
-        String clientId = withRealm(testSession, REALM_NAME, (s, realm) -> realm.addClient("testClient")
-                .getId());
+        String clientId = withRealm(
+                testSession,
+                REALM_NAME,
+                (s, realm) -> realm.addClient("testClient").getId());
 
         String mapperId = withRealm(testSession, REALM_NAME, (s, realm) -> {
             ClientModel client = s.clients().getClientById(realm, clientId);
@@ -799,8 +809,10 @@ public class ClientModelTest extends CassandraModelTest {
     @TestOnServer
     public void testScopeMappings(KeycloakSession testSession) {
 
-        String clientId = withRealm(testSession, REALM_NAME, (s, realm) -> realm.addClient("testClient")
-                .getId());
+        String clientId = withRealm(
+                testSession,
+                REALM_NAME,
+                (s, realm) -> realm.addClient("testClient").getId());
 
         withRealm(testSession, REALM_NAME, (s, realm) -> {
             ClientModel client = s.clients().getClientById(realm, clientId);
@@ -846,8 +858,10 @@ public class ClientModelTest extends CassandraModelTest {
     @TestOnServer
     public void testClientScopesCrud(KeycloakSession testSession) {
 
-        String clientId = withRealm(testSession, REALM_NAME, (s, realm) -> realm.addClient("testClient")
-                .getId());
+        String clientId = withRealm(
+                testSession,
+                REALM_NAME,
+                (s, realm) -> realm.addClient("testClient").getId());
 
         withRealm(testSession, REALM_NAME, (s, realm) -> {
             ClientModel client = s.clients().getClientById(realm, clientId);
@@ -892,8 +906,10 @@ public class ClientModelTest extends CassandraModelTest {
     @TestOnServer
     public void testClientSearch(KeycloakSession testSession) {
 
-        String clientId = withRealm(testSession, REALM_NAME, (s, realm) -> realm.addClient("testClient")
-                .getId());
+        String clientId = withRealm(
+                testSession,
+                REALM_NAME,
+                (s, realm) -> realm.addClient("testClient").getId());
 
         withRealm(testSession, REALM_NAME, (s, realm) -> {
             ClientModel client = s.clients().getClientById(realm, clientId);

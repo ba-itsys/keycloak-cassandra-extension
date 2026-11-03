@@ -163,8 +163,11 @@ public class UserSessionInitializerTest extends CassandraModelTest {
             for (UserSessionModel origSession : origSessions) {
                 UserSessionModel userSession = session.sessions().getUserSession(realm, origSession.getId());
                 UserSessionModel offlineUserSession = session.sessions().createOfflineUserSession(userSession);
-                userSession.getAuthenticatedClientSessions().values().forEach(clientSession -> session.sessions()
-                        .createOfflineClientSession(clientSession, offlineUserSession));
+                userSession
+                        .getAuthenticatedClientSessions()
+                        .values()
+                        .forEach(clientSession ->
+                                session.sessions().createOfflineClientSession(clientSession, offlineUserSession));
 
                 res[i++] = offlineUserSession;
             }

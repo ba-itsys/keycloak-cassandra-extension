@@ -639,8 +639,10 @@ public class RealmModelTest extends CassandraModelTest {
     @TestOnServer
     public void testClientInitialAccesses(KeycloakSession testSession) {
 
-        String modelId = withRealm(testSession, REALM_NAME, (s, realm) -> realm.createClientInitialAccessModel(60, 2)
-                .getId());
+        String modelId = withRealm(
+                testSession,
+                REALM_NAME,
+                (s, realm) -> realm.createClientInitialAccessModel(60, 2).getId());
 
         withRealm(testSession, REALM_NAME, (s, realm) -> {
             ClientInitialAccessModel clientInitialAccessModel = realm.getClientInitialAccessModel(modelId);

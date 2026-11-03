@@ -65,48 +65,69 @@ public class UserSessionExpirationTest extends CassandraModelTest {
                 return null;
             });
 
-            String uSId = withRealm(testSession, REALM_NAME, (session, realm) -> session.sessions()
-                    .createUserSession(
-                            realm,
-                            session.users().getUserByUsername(realm, "user1"),
-                            "user1",
-                            "127.0.0.1",
-                            "form",
-                            true,
-                            null,
-                            null)
-                    .getId());
+            String uSId = withRealm(
+                    testSession,
+                    REALM_NAME,
+                    (session, realm) -> session.sessions()
+                            .createUserSession(
+                                    realm,
+                                    session.users().getUserByUsername(realm, "user1"),
+                                    "user1",
+                                    "127.0.0.1",
+                                    "form",
+                                    true,
+                                    null,
+                                    null)
+                            .getId());
 
             assertThat(
-                    withRealm(testSession, REALM_NAME, (session, realm) -> session.sessions()
-                            .getUserSession(realm, uSId)),
+                    withRealm(
+                            testSession,
+                            REALM_NAME,
+                            (session, realm) -> session.sessions().getUserSession(realm, uSId)),
                     notNullValue());
             assertThat(
-                    withRealm(testSession, REALM_NAME, (session, realm) -> session.sessions()
-                            .getUserSessionsStream(realm, session.users().getUserByUsername(realm, "user1"))
-                            .collect(Collectors.toList())),
+                    withRealm(
+                            testSession,
+                            REALM_NAME,
+                            (session, realm) -> session.sessions()
+                                    .getUserSessionsStream(
+                                            realm, session.users().getUserByUsername(realm, "user1"))
+                                    .collect(Collectors.toList())),
                     hasSize(1));
 
             Time.setOffset(3);
             assertThat(
-                    withRealm(testSession, REALM_NAME, (session, realm) -> session.sessions()
-                            .getUserSession(realm, uSId)),
+                    withRealm(
+                            testSession,
+                            REALM_NAME,
+                            (session, realm) -> session.sessions().getUserSession(realm, uSId)),
                     notNullValue());
             assertThat(
-                    withRealm(testSession, REALM_NAME, (session, realm) -> session.sessions()
-                            .getUserSessionsStream(realm, session.users().getUserByUsername(realm, "user1"))
-                            .collect(Collectors.toList())),
+                    withRealm(
+                            testSession,
+                            REALM_NAME,
+                            (session, realm) -> session.sessions()
+                                    .getUserSessionsStream(
+                                            realm, session.users().getUserByUsername(realm, "user1"))
+                                    .collect(Collectors.toList())),
                     hasSize(1));
 
             Time.setOffset(5);
             assertThat(
-                    withRealm(testSession, REALM_NAME, (session, realm) -> session.sessions()
-                            .getUserSession(realm, uSId)),
+                    withRealm(
+                            testSession,
+                            REALM_NAME,
+                            (session, realm) -> session.sessions().getUserSession(realm, uSId)),
                     nullValue());
             assertThat(
-                    withRealm(testSession, REALM_NAME, (session, realm) -> session.sessions()
-                            .getUserSessionsStream(realm, session.users().getUserByUsername(realm, "user1"))
-                            .collect(Collectors.toList())),
+                    withRealm(
+                            testSession,
+                            REALM_NAME,
+                            (session, realm) -> session.sessions()
+                                    .getUserSessionsStream(
+                                            realm, session.users().getUserByUsername(realm, "user1"))
+                                    .collect(Collectors.toList())),
                     hasSize(0));
         } finally {
             Time.setOffset(0);
@@ -124,37 +145,52 @@ public class UserSessionExpirationTest extends CassandraModelTest {
                 return null;
             });
 
-            String uSId = withRealm(testSession, REALM_NAME, (session, realm) -> session.sessions()
-                    .createUserSession(
-                            realm,
-                            session.users().getUserByUsername(realm, "user1"),
-                            "user1",
-                            "127.0.0.1",
-                            "form",
-                            true,
-                            null,
-                            null)
-                    .getId());
+            String uSId = withRealm(
+                    testSession,
+                    REALM_NAME,
+                    (session, realm) -> session.sessions()
+                            .createUserSession(
+                                    realm,
+                                    session.users().getUserByUsername(realm, "user1"),
+                                    "user1",
+                                    "127.0.0.1",
+                                    "form",
+                                    true,
+                                    null,
+                                    null)
+                            .getId());
 
             assertThat(
-                    withRealm(testSession, REALM_NAME, (session, realm) -> session.sessions()
-                            .getUserSession(realm, uSId)),
+                    withRealm(
+                            testSession,
+                            REALM_NAME,
+                            (session, realm) -> session.sessions().getUserSession(realm, uSId)),
                     notNullValue());
             assertThat(
-                    withRealm(testSession, REALM_NAME, (session, realm) -> session.sessions()
-                            .getUserSessionsStream(realm, session.users().getUserByUsername(realm, "user1"))
-                            .collect(Collectors.toList())),
+                    withRealm(
+                            testSession,
+                            REALM_NAME,
+                            (session, realm) -> session.sessions()
+                                    .getUserSessionsStream(
+                                            realm, session.users().getUserByUsername(realm, "user1"))
+                                    .collect(Collectors.toList())),
                     hasSize(1));
 
             Time.setOffset(3);
             assertThat(
-                    withRealm(testSession, REALM_NAME, (session, realm) -> session.sessions()
-                            .getUserSession(realm, uSId)),
+                    withRealm(
+                            testSession,
+                            REALM_NAME,
+                            (session, realm) -> session.sessions().getUserSession(realm, uSId)),
                     notNullValue());
             assertThat(
-                    withRealm(testSession, REALM_NAME, (session, realm) -> session.sessions()
-                            .getUserSessionsStream(realm, session.users().getUserByUsername(realm, "user1"))
-                            .collect(Collectors.toList())),
+                    withRealm(
+                            testSession,
+                            REALM_NAME,
+                            (session, realm) -> session.sessions()
+                                    .getUserSessionsStream(
+                                            realm, session.users().getUserByUsername(realm, "user1"))
+                                    .collect(Collectors.toList())),
                     hasSize(1));
 
             withRealm(testSession, REALM_NAME, (session, realm) -> {
@@ -166,24 +202,36 @@ public class UserSessionExpirationTest extends CassandraModelTest {
 
             Time.setOffset(6);
             assertThat(
-                    withRealm(testSession, REALM_NAME, (session, realm) -> session.sessions()
-                            .getUserSession(realm, uSId)),
+                    withRealm(
+                            testSession,
+                            REALM_NAME,
+                            (session, realm) -> session.sessions().getUserSession(realm, uSId)),
                     notNullValue());
             assertThat(
-                    withRealm(testSession, REALM_NAME, (session, realm) -> session.sessions()
-                            .getUserSessionsStream(realm, session.users().getUserByUsername(realm, "user1"))
-                            .collect(Collectors.toList())),
+                    withRealm(
+                            testSession,
+                            REALM_NAME,
+                            (session, realm) -> session.sessions()
+                                    .getUserSessionsStream(
+                                            realm, session.users().getUserByUsername(realm, "user1"))
+                                    .collect(Collectors.toList())),
                     hasSize(1));
 
             Time.setOffset(8);
             assertThat(
-                    withRealm(testSession, REALM_NAME, (session, realm) -> session.sessions()
-                            .getUserSession(realm, uSId)),
+                    withRealm(
+                            testSession,
+                            REALM_NAME,
+                            (session, realm) -> session.sessions().getUserSession(realm, uSId)),
                     nullValue());
             assertThat(
-                    withRealm(testSession, REALM_NAME, (session, realm) -> session.sessions()
-                            .getUserSessionsStream(realm, session.users().getUserByUsername(realm, "user1"))
-                            .collect(Collectors.toList())),
+                    withRealm(
+                            testSession,
+                            REALM_NAME,
+                            (session, realm) -> session.sessions()
+                                    .getUserSessionsStream(
+                                            realm, session.users().getUserByUsername(realm, "user1"))
+                                    .collect(Collectors.toList())),
                     hasSize(0));
         } finally {
             Time.setOffset(0);
@@ -201,37 +249,52 @@ public class UserSessionExpirationTest extends CassandraModelTest {
                 return null;
             });
 
-            String uSId = withRealm(testSession, REALM_NAME, (session, realm) -> session.sessions()
-                    .createUserSession(
-                            realm,
-                            session.users().getUserByUsername(realm, "user1"),
-                            "user1",
-                            "127.0.0.1",
-                            "form",
-                            true,
-                            null,
-                            null)
-                    .getId());
+            String uSId = withRealm(
+                    testSession,
+                    REALM_NAME,
+                    (session, realm) -> session.sessions()
+                            .createUserSession(
+                                    realm,
+                                    session.users().getUserByUsername(realm, "user1"),
+                                    "user1",
+                                    "127.0.0.1",
+                                    "form",
+                                    true,
+                                    null,
+                                    null)
+                            .getId());
 
             assertThat(
-                    withRealm(testSession, REALM_NAME, (session, realm) -> session.sessions()
-                            .getUserSession(realm, uSId)),
+                    withRealm(
+                            testSession,
+                            REALM_NAME,
+                            (session, realm) -> session.sessions().getUserSession(realm, uSId)),
                     notNullValue());
             assertThat(
-                    withRealm(testSession, REALM_NAME, (session, realm) -> session.sessions()
-                            .getUserSessionsStream(realm, session.users().getUserByUsername(realm, "user1"))
-                            .collect(Collectors.toList())),
+                    withRealm(
+                            testSession,
+                            REALM_NAME,
+                            (session, realm) -> session.sessions()
+                                    .getUserSessionsStream(
+                                            realm, session.users().getUserByUsername(realm, "user1"))
+                                    .collect(Collectors.toList())),
                     hasSize(1));
 
             Time.setOffset(3);
             assertThat(
-                    withRealm(testSession, REALM_NAME, (session, realm) -> session.sessions()
-                            .getUserSession(realm, uSId)),
+                    withRealm(
+                            testSession,
+                            REALM_NAME,
+                            (session, realm) -> session.sessions().getUserSession(realm, uSId)),
                     notNullValue());
             assertThat(
-                    withRealm(testSession, REALM_NAME, (session, realm) -> session.sessions()
-                            .getUserSessionsStream(realm, session.users().getUserByUsername(realm, "user1"))
-                            .collect(Collectors.toList())),
+                    withRealm(
+                            testSession,
+                            REALM_NAME,
+                            (session, realm) -> session.sessions()
+                                    .getUserSessionsStream(
+                                            realm, session.users().getUserByUsername(realm, "user1"))
+                                    .collect(Collectors.toList())),
                     hasSize(1));
 
             withRealm(testSession, REALM_NAME, (session, realm) -> {
@@ -251,24 +314,36 @@ public class UserSessionExpirationTest extends CassandraModelTest {
 
             Time.setOffset(6);
             assertThat(
-                    withRealm(testSession, REALM_NAME, (session, realm) -> session.sessions()
-                            .getUserSession(realm, uSId)),
+                    withRealm(
+                            testSession,
+                            REALM_NAME,
+                            (session, realm) -> session.sessions().getUserSession(realm, uSId)),
                     notNullValue());
             assertThat(
-                    withRealm(testSession, REALM_NAME, (session, realm) -> session.sessions()
-                            .getUserSessionsStream(realm, session.users().getUserByUsername(realm, "user1"))
-                            .collect(Collectors.toList())),
+                    withRealm(
+                            testSession,
+                            REALM_NAME,
+                            (session, realm) -> session.sessions()
+                                    .getUserSessionsStream(
+                                            realm, session.users().getUserByUsername(realm, "user1"))
+                                    .collect(Collectors.toList())),
                     hasSize(1));
 
             Time.setOffset(8);
             assertThat(
-                    withRealm(testSession, REALM_NAME, (session, realm) -> session.sessions()
-                            .getUserSession(realm, uSId)),
+                    withRealm(
+                            testSession,
+                            REALM_NAME,
+                            (session, realm) -> session.sessions().getUserSession(realm, uSId)),
                     nullValue());
             assertThat(
-                    withRealm(testSession, REALM_NAME, (session, realm) -> session.sessions()
-                            .getUserSessionsStream(realm, session.users().getUserByUsername(realm, "user1"))
-                            .collect(Collectors.toList())),
+                    withRealm(
+                            testSession,
+                            REALM_NAME,
+                            (session, realm) -> session.sessions()
+                                    .getUserSessionsStream(
+                                            realm, session.users().getUserByUsername(realm, "user1"))
+                                    .collect(Collectors.toList())),
                     hasSize(0));
         } finally {
             Time.setOffset(0);
@@ -286,37 +361,52 @@ public class UserSessionExpirationTest extends CassandraModelTest {
                 return null;
             });
 
-            String uSId = withRealm(testSession, REALM_NAME, (session, realm) -> session.sessions()
-                    .createUserSession(
-                            realm,
-                            session.users().getUserByUsername(realm, "user1"),
-                            "user1",
-                            "127.0.0.1",
-                            "form",
-                            true,
-                            null,
-                            null)
-                    .getId());
+            String uSId = withRealm(
+                    testSession,
+                    REALM_NAME,
+                    (session, realm) -> session.sessions()
+                            .createUserSession(
+                                    realm,
+                                    session.users().getUserByUsername(realm, "user1"),
+                                    "user1",
+                                    "127.0.0.1",
+                                    "form",
+                                    true,
+                                    null,
+                                    null)
+                            .getId());
 
             assertThat(
-                    withRealm(testSession, REALM_NAME, (session, realm) -> session.sessions()
-                            .getUserSession(realm, uSId)),
+                    withRealm(
+                            testSession,
+                            REALM_NAME,
+                            (session, realm) -> session.sessions().getUserSession(realm, uSId)),
                     notNullValue());
             assertThat(
-                    withRealm(testSession, REALM_NAME, (session, realm) -> session.sessions()
-                            .getUserSessionsStream(realm, session.users().getUserByUsername(realm, "user1"))
-                            .collect(Collectors.toList())),
+                    withRealm(
+                            testSession,
+                            REALM_NAME,
+                            (session, realm) -> session.sessions()
+                                    .getUserSessionsStream(
+                                            realm, session.users().getUserByUsername(realm, "user1"))
+                                    .collect(Collectors.toList())),
                     hasSize(1));
 
             Time.setOffset(3);
             assertThat(
-                    withRealm(testSession, REALM_NAME, (session, realm) -> session.sessions()
-                            .getUserSession(realm, uSId)),
+                    withRealm(
+                            testSession,
+                            REALM_NAME,
+                            (session, realm) -> session.sessions().getUserSession(realm, uSId)),
                     notNullValue());
             assertThat(
-                    withRealm(testSession, REALM_NAME, (session, realm) -> session.sessions()
-                            .getUserSessionsStream(realm, session.users().getUserByUsername(realm, "user1"))
-                            .collect(Collectors.toList())),
+                    withRealm(
+                            testSession,
+                            REALM_NAME,
+                            (session, realm) -> session.sessions()
+                                    .getUserSessionsStream(
+                                            realm, session.users().getUserByUsername(realm, "user1"))
+                                    .collect(Collectors.toList())),
                     hasSize(1));
 
             // Should do nothing, since new override is greater than old override
@@ -329,24 +419,36 @@ public class UserSessionExpirationTest extends CassandraModelTest {
 
             Time.setOffset(6);
             assertThat(
-                    withRealm(testSession, REALM_NAME, (session, realm) -> session.sessions()
-                            .getUserSession(realm, uSId)),
+                    withRealm(
+                            testSession,
+                            REALM_NAME,
+                            (session, realm) -> session.sessions().getUserSession(realm, uSId)),
                     notNullValue());
             assertThat(
-                    withRealm(testSession, REALM_NAME, (session, realm) -> session.sessions()
-                            .getUserSessionsStream(realm, session.users().getUserByUsername(realm, "user1"))
-                            .collect(Collectors.toList())),
+                    withRealm(
+                            testSession,
+                            REALM_NAME,
+                            (session, realm) -> session.sessions()
+                                    .getUserSessionsStream(
+                                            realm, session.users().getUserByUsername(realm, "user1"))
+                                    .collect(Collectors.toList())),
                     hasSize(1));
 
             Time.setOffset(8);
             assertThat(
-                    withRealm(testSession, REALM_NAME, (session, realm) -> session.sessions()
-                            .getUserSession(realm, uSId)),
+                    withRealm(
+                            testSession,
+                            REALM_NAME,
+                            (session, realm) -> session.sessions().getUserSession(realm, uSId)),
                     nullValue());
             assertThat(
-                    withRealm(testSession, REALM_NAME, (session, realm) -> session.sessions()
-                            .getUserSessionsStream(realm, session.users().getUserByUsername(realm, "user1"))
-                            .collect(Collectors.toList())),
+                    withRealm(
+                            testSession,
+                            REALM_NAME,
+                            (session, realm) -> session.sessions()
+                                    .getUserSessionsStream(
+                                            realm, session.users().getUserByUsername(realm, "user1"))
+                                    .collect(Collectors.toList())),
                     hasSize(0));
         } finally {
             Time.setOffset(0);
@@ -364,37 +466,50 @@ public class UserSessionExpirationTest extends CassandraModelTest {
             return null;
         });
 
-        String uSId = withRealm(testSession, REALM_NAME, (session, realm) -> session.sessions()
-                .createUserSession(
-                        realm,
-                        session.users().getUserByUsername(realm, "user1"),
-                        "user1",
-                        "127.0.0.1",
-                        "form",
-                        true,
-                        null,
-                        null)
-                .getId());
+        String uSId = withRealm(
+                testSession,
+                REALM_NAME,
+                (session, realm) -> session.sessions()
+                        .createUserSession(
+                                realm,
+                                session.users().getUserByUsername(realm, "user1"),
+                                "user1",
+                                "127.0.0.1",
+                                "form",
+                                true,
+                                null,
+                                null)
+                        .getId());
 
         assertThat(
-                withRealm(testSession, REALM_NAME, (session, realm) -> session.sessions()
-                        .getUserSession(realm, uSId)),
+                withRealm(
+                        testSession,
+                        REALM_NAME,
+                        (session, realm) -> session.sessions().getUserSession(realm, uSId)),
                 notNullValue());
         assertThat(
-                withRealm(testSession, REALM_NAME, (session, realm) -> session.sessions()
-                        .getUserSessionsStream(realm, session.users().getUserByUsername(realm, "user1"))
-                        .collect(Collectors.toList())),
+                withRealm(
+                        testSession,
+                        REALM_NAME,
+                        (session, realm) -> session.sessions()
+                                .getUserSessionsStream(realm, session.users().getUserByUsername(realm, "user1"))
+                                .collect(Collectors.toList())),
                 hasSize(1));
 
         sleep(3000);
         assertThat(
-                withRealm(testSession, REALM_NAME, (session, realm) -> session.sessions()
-                        .getUserSession(realm, uSId)),
+                withRealm(
+                        testSession,
+                        REALM_NAME,
+                        (session, realm) -> session.sessions().getUserSession(realm, uSId)),
                 notNullValue());
         assertThat(
-                withRealm(testSession, REALM_NAME, (session, realm) -> session.sessions()
-                        .getUserSessionsStream(realm, session.users().getUserByUsername(realm, "user1"))
-                        .collect(Collectors.toList())),
+                withRealm(
+                        testSession,
+                        REALM_NAME,
+                        (session, realm) -> session.sessions()
+                                .getUserSessionsStream(realm, session.users().getUserByUsername(realm, "user1"))
+                                .collect(Collectors.toList())),
                 hasSize(1));
 
         withRealm(testSession, REALM_NAME, (session, realm) -> {
@@ -406,24 +521,34 @@ public class UserSessionExpirationTest extends CassandraModelTest {
 
         sleep(3000);
         assertThat(
-                withRealm(testSession, REALM_NAME, (session, realm) -> session.sessions()
-                        .getUserSession(realm, uSId)),
+                withRealm(
+                        testSession,
+                        REALM_NAME,
+                        (session, realm) -> session.sessions().getUserSession(realm, uSId)),
                 notNullValue());
         assertThat(
-                withRealm(testSession, REALM_NAME, (session, realm) -> session.sessions()
-                        .getUserSessionsStream(realm, session.users().getUserByUsername(realm, "user1"))
-                        .collect(Collectors.toList())),
+                withRealm(
+                        testSession,
+                        REALM_NAME,
+                        (session, realm) -> session.sessions()
+                                .getUserSessionsStream(realm, session.users().getUserByUsername(realm, "user1"))
+                                .collect(Collectors.toList())),
                 hasSize(1));
 
         sleep(2000);
         assertThat(
-                withRealm(testSession, REALM_NAME, (session, realm) -> session.sessions()
-                        .getUserSession(realm, uSId)),
+                withRealm(
+                        testSession,
+                        REALM_NAME,
+                        (session, realm) -> session.sessions().getUserSession(realm, uSId)),
                 nullValue());
         assertThat(
-                withRealm(testSession, REALM_NAME, (session, realm) -> session.sessions()
-                        .getUserSessionsStream(realm, session.users().getUserByUsername(realm, "user1"))
-                        .collect(Collectors.toList())),
+                withRealm(
+                        testSession,
+                        REALM_NAME,
+                        (session, realm) -> session.sessions()
+                                .getUserSessionsStream(realm, session.users().getUserByUsername(realm, "user1"))
+                                .collect(Collectors.toList())),
                 hasSize(0));
     }
 
@@ -437,26 +562,34 @@ public class UserSessionExpirationTest extends CassandraModelTest {
             return null;
         });
 
-        String uSId = withRealm(testSession, REALM_NAME, (session, realm) -> session.sessions()
-                .createUserSession(
-                        realm,
-                        session.users().getUserByUsername(realm, "user1"),
-                        "user1",
-                        "127.0.0.1",
-                        "form",
-                        true,
-                        null,
-                        null)
-                .getId());
+        String uSId = withRealm(
+                testSession,
+                REALM_NAME,
+                (session, realm) -> session.sessions()
+                        .createUserSession(
+                                realm,
+                                session.users().getUserByUsername(realm, "user1"),
+                                "user1",
+                                "127.0.0.1",
+                                "form",
+                                true,
+                                null,
+                                null)
+                        .getId());
 
         assertThat(
-                withRealm(testSession, REALM_NAME, (session, realm) -> session.sessions()
-                        .getUserSession(realm, uSId)),
+                withRealm(
+                        testSession,
+                        REALM_NAME,
+                        (session, realm) -> session.sessions().getUserSession(realm, uSId)),
                 notNullValue());
         assertThat(
-                withRealm(testSession, REALM_NAME, (session, realm) -> session.sessions()
-                        .getUserSessionsStream(realm, session.users().getUserByUsername(realm, "user1"))
-                        .collect(Collectors.toList())),
+                withRealm(
+                        testSession,
+                        REALM_NAME,
+                        (session, realm) -> session.sessions()
+                                .getUserSessionsStream(realm, session.users().getUserByUsername(realm, "user1"))
+                                .collect(Collectors.toList())),
                 hasSize(1));
 
         withRealm(testSession, REALM_NAME, (session, realm) -> {
@@ -466,13 +599,18 @@ public class UserSessionExpirationTest extends CassandraModelTest {
         });
 
         assertThat(
-                withRealm(testSession, REALM_NAME, (session, realm) -> session.sessions()
-                        .getUserSession(realm, uSId)),
+                withRealm(
+                        testSession,
+                        REALM_NAME,
+                        (session, realm) -> session.sessions().getUserSession(realm, uSId)),
                 nullValue());
         assertThat(
-                withRealm(testSession, REALM_NAME, (session, realm) -> session.sessions()
-                        .getUserSessionsStream(realm, session.users().getUserByUsername(realm, "user1"))
-                        .collect(Collectors.toList())),
+                withRealm(
+                        testSession,
+                        REALM_NAME,
+                        (session, realm) -> session.sessions()
+                                .getUserSessionsStream(realm, session.users().getUserByUsername(realm, "user1"))
+                                .collect(Collectors.toList())),
                 hasSize(0));
     }
 
