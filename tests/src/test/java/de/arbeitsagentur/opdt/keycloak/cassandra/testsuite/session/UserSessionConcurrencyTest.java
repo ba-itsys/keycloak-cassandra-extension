@@ -53,16 +53,19 @@ public class UserSessionConcurrencyTest extends CassandraModelTest {
     public void testConcurrentNotesChange(KeycloakSession testSession) throws InterruptedException {
 
         // Create user session
-        String uId = withRealm(testSession, REALM_NAME, (session, realm) -> session.sessions()
-                        .createUserSession(
-                                realm,
-                                session.users().getUserByUsername(realm, "user1"),
-                                "user1",
-                                "127.0.0.1",
-                                "form",
-                                true,
-                                null,
-                                null))
+        String uId = withRealm(
+                        testSession,
+                        REALM_NAME,
+                        (session, realm) -> session.sessions()
+                                .createUserSession(
+                                        realm,
+                                        session.users().getUserByUsername(realm, "user1"),
+                                        "user1",
+                                        "127.0.0.1",
+                                        "form",
+                                        true,
+                                        null,
+                                        null))
                 .getId();
 
         withRealm(testSession, REALM_NAME, (session, realm) -> {

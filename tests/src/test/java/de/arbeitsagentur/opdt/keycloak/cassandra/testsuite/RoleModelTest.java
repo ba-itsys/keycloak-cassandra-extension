@@ -66,9 +66,12 @@ public class RoleModelTest extends CassandraModelTest {
 
     private static List<RoleModel> getResult(
             KeycloakSession testSession, String realmName, String search, Integer first, Integer max) {
-        return withRealm(testSession, realmName, (session, realm) -> session.roles()
-                .getRolesStream(realm, rolesSubset().stream(), search, first, max)
-                .collect(Collectors.toList()));
+        return withRealm(
+                testSession,
+                realmName,
+                (session, realm) -> session.roles()
+                        .getRolesStream(realm, rolesSubset().stream(), search, first, max)
+                        .collect(Collectors.toList()));
     }
 
     private static RoleModel getMainRole(KeycloakSession testSession, String realmName) {
@@ -78,10 +81,13 @@ public class RoleModelTest extends CassandraModelTest {
 
     private static List<RoleModel> getModelResult(
             KeycloakSession testSession, String realmName, String search, Integer first, Integer max) {
-        return withRealm(testSession, realmName, ((session, realm) -> session.roles()
-                .getRoleById(realm, MAIN_ROLE_ID)
-                .getCompositesStream(search, first, max)
-                .collect(Collectors.toList())));
+        return withRealm(
+                testSession,
+                realmName,
+                ((session, realm) -> session.roles()
+                        .getRoleById(realm, MAIN_ROLE_ID)
+                        .getCompositesStream(search, first, max)
+                        .collect(Collectors.toList())));
     }
 
     @TestOnServer
@@ -93,29 +99,37 @@ public class RoleModelTest extends CassandraModelTest {
         assertIndexValues(result, contains(0, 1, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 2, 3, 4, 5, 6, 7, 8, 9));
 
         // test non-existing role ids
-        result = withRealm(testSession, REALM_NAME, (session, realm) -> session.roles()
-                .getRolesStream(
-                        realm,
-                        IntStream.range(0, 10).boxed().map(i -> UUID.randomUUID()
-                                .toString()),
-                        null,
-                        null,
-                        null)
-                .collect(Collectors.toList()));
+        result = withRealm(
+                testSession,
+                REALM_NAME,
+                (session, realm) -> session.roles()
+                        .getRolesStream(
+                                realm,
+                                IntStream.range(0, 10)
+                                        .boxed()
+                                        .map(i -> UUID.randomUUID().toString()),
+                                null,
+                                null,
+                                null)
+                        .collect(Collectors.toList()));
         assertThat(result, is(empty()));
 
         // test mixed non-existing with existing
-        result = withRealm(testSession, REALM_NAME, (session, realm) -> session.roles()
-                .getRolesStream(
-                        realm,
-                        Stream.concat(
-                                rolesSubset().subList(0, 10).stream(),
-                                IntStream.range(0, 10).boxed().map(i -> UUID.randomUUID()
-                                        .toString())),
-                        null,
-                        null,
-                        null)
-                .collect(Collectors.toList()));
+        result = withRealm(
+                testSession,
+                REALM_NAME,
+                (session, realm) -> session.roles()
+                        .getRolesStream(
+                                realm,
+                                Stream.concat(
+                                        rolesSubset().subList(0, 10).stream(),
+                                        IntStream.range(0, 10)
+                                                .boxed()
+                                                .map(i -> UUID.randomUUID().toString())),
+                                null,
+                                null,
+                                null)
+                        .collect(Collectors.toList()));
         assertThat(result, hasSize(10));
         assertIndexValues(result, contains(0, 1, 2, 3, 4, 5, 6, 7, 8, 9));
     }
@@ -127,10 +141,13 @@ public class RoleModelTest extends CassandraModelTest {
         assertThat(result, hasSize(rolesSubset().size()));
         assertIndexValues(result, contains(0, 1, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 2, 3, 4, 5, 6, 7, 8, 9));
 
-        result = withRealm(testSession, REALM_NAME, (session, realm) -> session.roles()
-                .getRoleById(realm, MAIN_ROLE_ID)
-                .getCompositesStream()
-                .collect(Collectors.toList()));
+        result = withRealm(
+                testSession,
+                REALM_NAME,
+                (session, realm) -> session.roles()
+                        .getRoleById(realm, MAIN_ROLE_ID)
+                        .getCompositesStream()
+                        .collect(Collectors.toList()));
         assertThat(result, hasSize(rolesSubset().size()));
         assertIndexValues(
                 result, containsInAnyOrder(0, 1, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 2, 3, 4, 5, 6, 7, 8, 9));
@@ -145,15 +162,19 @@ public class RoleModelTest extends CassandraModelTest {
     @TestOnServer
     public void testRolesWithIdsSearchQueriesHandleUnknownIdsWithoutNpe(KeycloakSession testSession) {
 
-        List<RoleModel> result = withRealm(testSession, REALM_NAME, (session, realm) -> session.roles()
-                .getRolesStream(
-                        realm,
-                        IntStream.range(0, 10).boxed().map(i -> UUID.randomUUID()
-                                .toString()),
-                        "role-composite",
-                        null,
-                        null)
-                .collect(Collectors.toList()));
+        List<RoleModel> result = withRealm(
+                testSession,
+                REALM_NAME,
+                (session, realm) -> session.roles()
+                        .getRolesStream(
+                                realm,
+                                IntStream.range(0, 10)
+                                        .boxed()
+                                        .map(i -> UUID.randomUUID().toString()),
+                                "role-composite",
+                                null,
+                                null)
+                        .collect(Collectors.toList()));
 
         assertThat(result, is(empty()));
     }

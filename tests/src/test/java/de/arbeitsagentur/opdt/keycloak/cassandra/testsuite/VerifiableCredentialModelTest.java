@@ -76,9 +76,11 @@ public class VerifiableCredentialModelTest extends CassandraModelTest {
             return null;
         });
 
-        String originalRevision = withRealm(testSession, REALM_NAME, (session, realm) -> session.users()
-                .getVerifiableCredentialById(id)
-                .getRevision());
+        String originalRevision = withRealm(
+                testSession,
+                REALM_NAME,
+                (session, realm) ->
+                        session.users().getVerifiableCredentialById(id).getRevision());
 
         withRealm(testSession, REALM_NAME, (session, realm) -> {
             UserVerifiableCredentialModel updated =

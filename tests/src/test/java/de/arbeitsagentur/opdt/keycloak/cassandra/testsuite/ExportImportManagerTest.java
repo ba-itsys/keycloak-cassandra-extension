@@ -382,8 +382,9 @@ public class ExportImportManagerTest extends CassandraModelTest {
                             .collect(Collectors.toList()),
                     containsInAnyOrder("push-button-authenticator", UsernamePasswordFormFactory.PROVIDER_ID));
             assertThat(
-                    subflow2ChildExecutions.stream().allMatch(e -> e.getRequirement()
-                            .equals(AuthenticationExecutionModel.Requirement.REQUIRED)),
+                    subflow2ChildExecutions.stream()
+                            .allMatch(
+                                    e -> e.getRequirement().equals(AuthenticationExecutionModel.Requirement.REQUIRED)),
                     is(true));
 
             ClientModel testAppFlowClient = session.clients().getClientByClientId(importedRealm, "test-app-flow");

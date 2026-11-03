@@ -265,12 +265,16 @@ public class GroupModelTest extends CassandraModelTest {
     public void testSearchForGroupByNameStreamHandlesNullSearch(KeycloakSession testSession) {
 
         withRealm(testSession, REALM_NAME, (session, realm) -> {
-            Assert.assertThrows(IllegalArgumentException.class, () -> session.groups()
-                    .searchForGroupByNameStream(realm, null, null, null, null)
-                    .count());
-            Assert.assertThrows(IllegalArgumentException.class, () -> session.groups()
-                    .searchForGroupByNameStream(realm, null, false, null, null)
-                    .count());
+            Assert.assertThrows(
+                    IllegalArgumentException.class,
+                    () -> session.groups()
+                            .searchForGroupByNameStream(realm, null, null, null, null)
+                            .count());
+            Assert.assertThrows(
+                    IllegalArgumentException.class,
+                    () -> session.groups()
+                            .searchForGroupByNameStream(realm, null, false, null, null)
+                            .count());
 
             return null;
         });
@@ -447,9 +451,11 @@ public class GroupModelTest extends CassandraModelTest {
     public void testGetTopLevelGroupsStreamHandlesNullSearchAndExact(KeycloakSession testSession) {
 
         withRealm(testSession, REALM_NAME, (session, realm) -> {
-            Assert.assertThrows(IllegalArgumentException.class, () -> session.groups()
-                    .getTopLevelGroupsStream(realm, null, null, null, null)
-                    .count());
+            Assert.assertThrows(
+                    IllegalArgumentException.class,
+                    () -> session.groups()
+                            .getTopLevelGroupsStream(realm, null, null, null, null)
+                            .count());
 
             return null;
         });

@@ -36,8 +36,9 @@ public class CassandraIdentityProviderStorageProvider implements IdentityProvide
 
     @Override
     public void removeAll() {
-        getRealm().getIdentityProvidersStream().forEach(idp -> getRealm()
-                .removeIdentityProviderByAlias(idp.getAlias()));
+        getRealm()
+                .getIdentityProvidersStream()
+                .forEach(idp -> getRealm().removeIdentityProviderByAlias(idp.getAlias()));
     }
 
     @Override
