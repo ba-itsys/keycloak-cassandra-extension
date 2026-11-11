@@ -1,5 +1,17 @@
 # Changelog
 
+## [6.2.2](https://github.com/ba-itsys/keycloak-cassandra-extension/compare/v6.2.1...v6.2.2) (2026-11-11)
+
+
+### Bug Fixes
+
+* set transient users in user session ([2eb3771](https://github.com/ba-itsys/keycloak-cassandra-extension/commit/2eb3771a1da70cdd82e659e8b0018fee79aafe41))
+
+
+### Dependencies
+
+* **deps-dev:** bump com.diffplug.spotless:spotless-maven-plugin ([5cf77bd](https://github.com/ba-itsys/keycloak-cassandra-extension/commit/5cf77bd3cdb4e54c29c4bfec3b77cfc56625ceef))
+
 ## [6.2.1](https://github.com/ba-itsys/keycloak-cassandra-extension/compare/v6.2.0...v6.2.1) (2026-11-03)
 
 
