@@ -17,7 +17,6 @@ package de.arbeitsagentur.opdt.keycloak.cassandra.userSession;
 
 import static de.arbeitsagentur.opdt.keycloak.cassandra.userSession.expiration.CassandraSessionExpiration.setUserSessionExpiration;
 import static de.arbeitsagentur.opdt.keycloak.common.ExpirationUtils.isExpired;
-import static org.keycloak.models.Constants.SESSION_NOTE_LIGHTWEIGHT_USER;
 
 import de.arbeitsagentur.opdt.keycloak.cassandra.AttributeTypes;
 import de.arbeitsagentur.opdt.keycloak.cassandra.userSession.expiration.SessionExpirationData;
@@ -29,7 +28,6 @@ import java.util.*;
 import java.util.stream.Collectors;
 import lombok.EqualsAndHashCode;
 import lombok.extern.jbosslog.JBossLog;
-import org.keycloak.common.Profile;
 import org.keycloak.common.util.Time;
 import org.keycloak.models.*;
 import org.keycloak.models.light.LightweightUserAdapter;
@@ -71,6 +69,8 @@ public class CassandraUserSessionAdapter implements UserSessionModel {
 
     private boolean updated = false;
     private boolean deleted = false;
+    private boolean userIdChanged = false;
+    private LightweightUserAdapter lightweightUser;
 
     public CassandraUserSessionAdapter(
             KeycloakSession session,
@@ -81,6 +81,10 @@ public class CassandraUserSessionAdapter implements UserSessionModel {
         this.realm = realm;
         this.userSessionEntity = userSessionEntity;
         this.userSessionRepository = userSessionRepository;
+    }
+
+    void bindUser(UserModel user) {
+        lightweightUser = LightweightUserAdapter.isLightweightUser(user) ? (LightweightUserAdapter) user : null;
     }
 
     public UserSession getUserSessionEntity() {
@@ -118,18 +122,8 @@ public class CassandraUserSessionAdapter implements UserSessionModel {
 
     @Override
     public UserModel getUser() {
-        if (Profile.isFeatureEnabled(Profile.Feature.TRANSIENT_USERS)
-                && userSessionEntity.getNotes().containsKey(SESSION_NOTE_LIGHTWEIGHT_USER)) {
-            LightweightUserAdapter lua = LightweightUserAdapter.fromString(
-                    session, realm, userSessionEntity.getNotes().get(SESSION_NOTE_LIGHTWEIGHT_USER));
-            lua.setUpdateHandler(lua1 -> {
-                if (lua == lua1) { // Ensure there is no conflicting user model, only the latest lightweight
-                    // user can be used
-                    setNote(SESSION_NOTE_LIGHTWEIGHT_USER, lua1.serialize());
-                }
-            });
-
-            return lua;
+        if (lightweightUser != null) {
+            return lightweightUser;
         }
 
         return session.users().getUserById(getRealm(), userSessionEntity.getUserId());
@@ -298,7 +292,9 @@ public class CassandraUserSessionAdapter implements UserSessionModel {
         String correspondingSessionId = userSessionEntity.getNotes().get(CORRESPONDING_SESSION_ID);
 
         userSessionEntity.setRealmId(realm.getId());
+        userIdChanged |= !Objects.equals(userSessionEntity.getUserId(), user.getId());
         userSessionEntity.setUserId(user.getId());
+        bindUser(user);
         userSessionEntity.setLoginUsername(loginUsername);
         userSessionEntity.setIpAddress(ipAddress);
         userSessionEntity.setAuthMethod(authMethod);
@@ -319,10 +315,21 @@ public class CassandraUserSessionAdapter implements UserSessionModel {
     }
 
     public void flush() {
+        if (lightweightUser != null && !lightweightUser.getId().equals(userSessionEntity.getUserId())) {
+            userSessionEntity.setUserId(lightweightUser.getId());
+            userIdChanged = true;
+            updated = true;
+        }
+
         if (updated && !deleted) {
             setUserSessionExpiration(userSessionEntity, getSessionExpirationData());
-            userSessionRepository.update(userSessionEntity);
+            if (userIdChanged) {
+                userSessionRepository.updateUserId(realm, userSessionEntity);
+            } else {
+                userSessionRepository.update(userSessionEntity);
+            }
             updated = false;
+            userIdChanged = false;
         }
     }
 
