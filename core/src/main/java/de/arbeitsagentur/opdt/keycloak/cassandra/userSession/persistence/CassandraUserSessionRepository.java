@@ -47,10 +47,21 @@ public class CassandraUserSessionRepository implements UserSessionRepository {
     }
 
     @Override
+    public void updateUserId(RealmModel realm, UserSession session) {
+        update(session);
+        if (isStored(session)) {
+            insertOrUpdate(
+                    realm,
+                    session,
+                    new UserSessionToAttributeMapping(session.getId(), USER_ID, Arrays.asList(session.getUserId())));
+        }
+    }
+
+    @Override
     public void insert(RealmModel realm, UserSession session) {
         insertOrUpdate(session);
 
-        // all these attributes cannot be changed afterwards so they are only set during "insert"
+        // apart from the user id (see updateUserId), these attributes are only set during "insert"
         if (session.getNotes().containsKey(CORRESPONDING_SESSION_ID)) {
             insertOrUpdate(
                     realm,
@@ -240,9 +251,13 @@ public class CassandraUserSessionRepository implements UserSessionRepository {
         return dao.findAttribute(userSessionId, attributeName);
     }
 
+    private static boolean isStored(UserSession session) {
+        return (session.getOffline() != null && session.getOffline())
+                || PERSISTENT.equals(session.getPersistenceState());
+    }
+
     private void insertOrUpdate(UserSession session) {
-        if ((session.getOffline() != null && session.getOffline())
-                || PERSISTENT.equals(session.getPersistenceState())) {
+        if (isStored(session)) {
             if (session.getExpiration() == null) {
                 dao.insertOrUpdate(session);
             } else {

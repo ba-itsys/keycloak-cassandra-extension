@@ -28,6 +28,8 @@ public interface UserSessionRepository {
 
     void update(UserSession session);
 
+    void updateUserId(RealmModel realm, UserSession session);
+
     void addClientSession(RealmModel realmModel, UserSession session, AuthenticatedClientSessionValue clientSession);
 
     UserSession findUserSessionById(String id);

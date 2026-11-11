@@ -93,6 +93,7 @@ public class CassandraUserSessionProvider implements UserSessionProvider {
                             cassandraUserSessionAdapter.setNote(SESSION_NOTE_LIGHTWEIGHT_USER, lua1.serialize());
                         }
                     });
+                    cassandraUserSessionAdapter.bindUser(lua);
                 }
 
                 session.getTransactionManager().enlistAfterCompletion((CassandraModelTransaction) () -> {
@@ -233,6 +234,7 @@ public class CassandraUserSessionProvider implements UserSessionProvider {
         CassandraUserSessionAdapter userSession = entityToAdapterFunc(realm).apply(entity);
 
         if (userSession != null) {
+            userSession.bindUser(user);
             DeviceActivityManager.attachDevice(userSession, session);
         }
 

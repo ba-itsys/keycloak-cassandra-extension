@@ -400,6 +400,12 @@ public class ManagedCompositeCassandraRepository implements CompositeRepository 
 
     @L1Cached(cacheName = USER_SESSION_CACHE)
     @InvalidateCache
+    public void updateUserId(RealmModel realm, UserSession session) {
+        this.userSessionRepository.updateUserId(realm, session);
+    }
+
+    @L1Cached(cacheName = USER_SESSION_CACHE)
+    @InvalidateCache
     public void addClientSession(RealmModel realm, UserSession session, AuthenticatedClientSessionValue clientSession) {
         this.userSessionRepository.addClientSession(realm, session, clientSession);
     }

@@ -19,8 +19,10 @@ package de.arbeitsagentur.opdt.keycloak.cassandra.testsuite.session;
 import static de.arbeitsagentur.opdt.keycloak.cassandra.testsuite.session.SessionTestUtils.*;
 import static org.hamcrest.CoreMatchers.*;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.Matchers.hasSize;
 import static org.junit.Assert.*;
+import static org.keycloak.models.Constants.SESSION_NOTE_LIGHTWEIGHT_USER;
 import static org.keycloak.models.utils.KeycloakModelUtils.generateId;
 import static org.keycloak.models.utils.KeycloakModelUtils.runJobInTransaction;
 
@@ -33,9 +35,15 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import org.hamcrest.Matchers;
 import org.junit.Assert;
+import org.keycloak.authentication.AuthenticationProcessor;
+import org.keycloak.common.ClientConnection;
 import org.keycloak.common.util.Time;
+import org.keycloak.events.EventBuilder;
+import org.keycloak.events.EventType;
 import org.keycloak.models.*;
+import org.keycloak.models.light.LightweightUserAdapter;
 import org.keycloak.protocol.oidc.OIDCLoginProtocol;
+import org.keycloak.sessions.AuthenticationSessionModel;
 import org.keycloak.testframework.annotations.InjectRealm;
 import org.keycloak.testframework.annotations.KeycloakIntegrationTest;
 import org.keycloak.testframework.injection.LifeCycle;
@@ -1214,6 +1222,201 @@ public class UserSessionProviderModelTest extends CassandraModelTest {
             assertThat(
                     stats.get(s.clients().getClientByClientId(realm, "clientId").getId()), is(4L));
 
+            return null;
+        });
+    }
+
+    @TestOnServer
+    public void testCreatedUserSessionReturnsTransientUser(KeycloakSession testSession) {
+        inCommittedTransaction(testSession, session -> {
+            RealmModel realm = session.realms().getRealmByName(REALM_NAME);
+            LightweightUserAdapter transientUser = new LightweightUserAdapter(session, realm, null);
+            transientUser.setUsername("transient-user");
+
+            UserSessionModel userSession = session.sessions()
+                    .createUserSession(
+                            generateId(),
+                            realm,
+                            transientUser,
+                            "transient-user",
+                            "127.0.0.1",
+                            "form",
+                            false,
+                            null,
+                            null,
+                            UserSessionModel.SessionPersistenceState.PERSISTENT);
+
+            assertSame(transientUser, userSession.getUser());
+            return null;
+        });
+    }
+
+    @TestOnServer
+    public void testRestartedUserSessionReturnsTransientUser(KeycloakSession testSession) {
+        String id = inCommittedTransaction(testSession, session -> {
+            RealmModel realm = session.realms().getRealmByName(REALM_NAME);
+            return session.sessions()
+                    .createUserSession(
+                            generateId(),
+                            realm,
+                            session.users().getUserByUsername(realm, "user1"),
+                            "user1",
+                            "127.0.0.1",
+                            "form",
+                            false,
+                            null,
+                            null,
+                            UserSessionModel.SessionPersistenceState.PERSISTENT)
+                    .getId();
+        });
+
+        inCommittedTransaction(testSession, session -> {
+            RealmModel realm = session.realms().getRealmByName(REALM_NAME);
+            LightweightUserAdapter transientUser = new LightweightUserAdapter(session, realm, null);
+            transientUser.setUsername("transient-user");
+
+            UserSessionModel userSession = session.sessions().getUserSession(realm, id);
+            userSession.restartSession(realm, transientUser, "transient-user", "127.0.0.1", "form", false, null, null);
+
+            assertSame(transientUser, userSession.getUser());
+            return null;
+        });
+    }
+
+    @TestOnServer
+    public void testTransientUserIsRestoredFromUserSessionNote(KeycloakSession testSession) {
+        String id = inCommittedTransaction(testSession, session -> {
+            RealmModel realm = session.realms().getRealmByName(REALM_NAME);
+            LightweightUserAdapter transientUser = new LightweightUserAdapter(session, realm, null);
+            transientUser.setUsername("transient-user");
+
+            UserSessionModel userSession = session.sessions()
+                    .createUserSession(
+                            generateId(),
+                            realm,
+                            transientUser,
+                            "transient-user",
+                            "127.0.0.1",
+                            "form",
+                            false,
+                            null,
+                            null,
+                            UserSessionModel.SessionPersistenceState.PERSISTENT);
+            transientUser.setOwningUserSessionId(userSession.getId());
+            userSession.setNote(SESSION_NOTE_LIGHTWEIGHT_USER, transientUser.serialize());
+            return userSession.getId();
+        });
+
+        inCommittedTransaction(testSession, session -> {
+            RealmModel realm = session.realms().getRealmByName(REALM_NAME);
+            UserSessionModel userSession = session.sessions().getUserSession(realm, id);
+            UserModel user = userSession.getUser();
+
+            assertThat(user, instanceOf(LightweightUserAdapter.class));
+            assertThat(user.getId(), is(LightweightUserAdapter.ID_PREFIX + id));
+            assertThat(user.getUsername(), is("transient-user"));
+            assertSame(user, userSession.getUser());
+
+            user.setSingleAttribute("color", "blue");
+            return null;
+        });
+
+        inCommittedTransaction(testSession, session -> {
+            RealmModel realm = session.realms().getRealmByName(REALM_NAME);
+            UserModel user = session.sessions().getUserSession(realm, id).getUser();
+
+            assertThat(user.getFirstAttribute("color"), is("blue"));
+            return null;
+        });
+    }
+
+    @TestOnServer
+    public void testTransientUserLoginAttachesUserSession(KeycloakSession testSession) {
+        String id = inCommittedTransaction(testSession, session -> {
+            RealmModel realm = session.realms().getRealmByName(REALM_NAME);
+            session.getContext().setRealm(realm);
+            ClientModel client = realm.getClientByClientId("test-app");
+
+            AuthenticationSessionModel authSession = session.authenticationSessions()
+                    .createRootAuthenticationSession(realm)
+                    .createAuthenticationSession(client);
+            authSession.setProtocol(OIDCLoginProtocol.LOGIN_PROTOCOL);
+            LightweightUserAdapter transientUser = new LightweightUserAdapter(session, realm, null);
+            transientUser.setUsername("transient-user");
+            authSession.setAuthenticatedUser(transientUser);
+
+            ClientConnection connection = session.getContext().getConnection();
+            UserSessionModel userSession = AuthenticationProcessor.attachSession(
+                            authSession,
+                            null,
+                            session,
+                            realm,
+                            connection,
+                            new EventBuilder(realm, session, connection).event(EventType.LOGIN))
+                    .getClientSession()
+                    .getUserSession();
+
+            assertThat(userSession.getUser().getId(), is(LightweightUserAdapter.ID_PREFIX + userSession.getId()));
+            return userSession.getId();
+        });
+
+        inCommittedTransaction(testSession, session -> {
+            RealmModel realm = session.realms().getRealmByName(REALM_NAME);
+            UserModel user = session.sessions().getUserSession(realm, id).getUser();
+
+            assertThat(user.getId(), is(LightweightUserAdapter.ID_PREFIX + id));
+            assertThat(user.getUsername(), is("transient-user"));
+            assertThat(
+                    session.sessions()
+                            .getUserSessionsStream(realm, user)
+                            .map(UserSessionModel::getId)
+                            .collect(Collectors.toList()),
+                    contains(id));
+            return null;
+        });
+    }
+
+    @TestOnServer
+    public void testRestartedUserSessionIsFoundByNewUser(KeycloakSession testSession) {
+        String id = inCommittedTransaction(testSession, session -> {
+            RealmModel realm = session.realms().getRealmByName(REALM_NAME);
+            return session.sessions()
+                    .createUserSession(
+                            generateId(),
+                            realm,
+                            session.users().getUserByUsername(realm, "user1"),
+                            "user1",
+                            "127.0.0.1",
+                            "form",
+                            false,
+                            null,
+                            null,
+                            UserSessionModel.SessionPersistenceState.PERSISTENT)
+                    .getId();
+        });
+
+        inCommittedTransaction(testSession, session -> {
+            RealmModel realm = session.realms().getRealmByName(REALM_NAME);
+            UserModel user2 = session.users().getUserByUsername(realm, "user2");
+            session.sessions()
+                    .getUserSession(realm, id)
+                    .restartSession(realm, user2, "user2", "127.0.0.1", "form", false, null, null);
+            return null;
+        });
+
+        inCommittedTransaction(testSession, session -> {
+            RealmModel realm = session.realms().getRealmByName(REALM_NAME);
+            List<String> user1Sessions = session.sessions()
+                    .getUserSessionsStream(realm, session.users().getUserByUsername(realm, "user1"))
+                    .map(UserSessionModel::getId)
+                    .collect(Collectors.toList());
+            List<String> user2Sessions = session.sessions()
+                    .getUserSessionsStream(realm, session.users().getUserByUsername(realm, "user2"))
+                    .map(UserSessionModel::getId)
+                    .collect(Collectors.toList());
+
+            assertThat(user1Sessions, not(hasItem(id)));
+            assertThat(user2Sessions, hasItem(id));
             return null;
         });
     }
